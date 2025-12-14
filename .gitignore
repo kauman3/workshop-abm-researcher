@@ -25,6 +25,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.pyc
 
 # Streamlit
 .streamlit/
@@ -39,6 +40,9 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+
+# Virtual environments
+.venv/
 
 # Generated PDFs (optional - uncomment if you don't want to track generated PDFs)
 # *.pdf
