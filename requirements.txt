@@ -1,0 +1,10 @@
+streamlit
+langchain
+langchain-community
+langchain-openai
+langchain-anthropic
+tavily-python
+xhtml2pdf
+markdown
+python-dotenv
+
