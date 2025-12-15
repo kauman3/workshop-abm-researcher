@@ -1,116 +1,233 @@
 import streamlit as st
 import os
+import json
 from research_agent import get_company_data
 from pdf_generator import create_styled_pdf
 
-# 1. PAGE CONFIGURATION
+# PAGE CONFIGURATION
 st.set_page_config(
     page_title="Workshop ABM Generator", 
     page_icon="🚀",
     layout="centered"
 )
 
-# 2. HEADER & STYLE
-# We inject some custom CSS to make it look branded (Workshop uses purple/pink)
+# CUSTOM STYLING
 st.markdown("""
     <style>
     .stButton>button {
         width: 100%;
-        background-color: #FF4B4B;
+        background-color: #2D5BFF;
         color: white;
+        font-weight: 600;
     }
-    .report-box {
-        border: 1px solid #ddd;
+    .stButton>button:hover {
+        background-color: #1E40AF;
+    }
+    .section-card {
+        border: 1px solid #e5e7eb;
         padding: 20px;
         border-radius: 10px;
-        background-color: #f9f9f9;
+        background-color: #f9fafb;
+        margin-bottom: 15px;
+    }
+    .metric-box {
+        background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #2D5BFF;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 Account-Based One-Pager")
-st.markdown("Generate a hyper-personalized BDR asset in seconds.")
+st.title("🚀 Workshop ABM One-Pager Generator")
+st.markdown("Generate hyper-personalized BDR assets powered by live research + AI")
 
-# 3. SIDEBAR (API Status)
+# SIDEBAR
 with st.sidebar:
-    st.header("System Status")
+    st.header("🔧 System Status")
     if os.environ.get("TAVILY_API_KEY"):
-        st.success("Tavily Search: Active")
+        st.success("✓ Tavily Search Active")
     else:
-        st.error("Tavily Key Missing")
+        st.error("✗ Tavily Key Missing")
         
     if os.environ.get("ANTHROPIC_API_KEY"):
-        st.success("Anthropic AI: Active")
+        st.success("✓ Claude AI Active")
     else:
-        st.error("Anthropic Key Missing")
+        st.error("✗ Anthropic Key Missing")
     
-    st.info("This tool scans live news, tech stacks, and leadership changes to build a custom outreach strategy.")
+    st.divider()
+    st.info("**How it works:**\n\n1. Searches live web for news, tech stack, and leadership changes\n2. Identifies internal comms pain points\n3. Generates formatted PDF one-pager")
+    
+    st.divider()
+    st.caption("v2.0 - Clean Minimal Template")
 
-# 4. INPUTS
+# INPUTS
 col1, col2 = st.columns(2)
 with col1:
-    company_name = st.text_input("Target Company", placeholder="e.g. Spotify")
+    company_name = st.text_input("🏢 Target Company", placeholder="e.g., Nebraska Medicine")
 with col2:
-    website = st.text_input("Website URL", placeholder="e.g. spotify.com")
+    website = st.text_input("🌐 Website URL", placeholder="e.g., nebraskamed.com")
 
-# 5. EXECUTION LOGIC
-if st.button("Generate Strategy"):
+# GENERATE BUTTON
+if st.button("🔍 Generate Strategy", type="primary"):
     if not company_name or not website:
-        st.warning("Please provide both a company name and website.")
+        st.warning("⚠️ Please provide both company name and website URL")
     else:
-        # Create a status container to show "Thinking" process
-        status_box = st.status("Initializing Agent...", expanded=True)
+        status_box = st.status("Initializing research agent...", expanded=True)
         
         try:
-            status_box.write("🕵️‍♂️ Searching live web data (News, Hiring, Tech Stack)...")
-            # We call the function we wrote in Step 2
-            report_markdown = get_company_data(company_name, website)
+            status_box.write("🕵️ Searching live web data (news, hiring, tech stack)...")
+            
+            # Get structured data from research agent
+            structured_data = get_company_data(company_name, website)
             
             status_box.write("🧠 Synthesizing insights into BDR format...")
-            status_box.update(label="Analysis Complete!", state="complete", expanded=False)
+            status_box.write("📄 Generating PDF with Workshop branding...")
             
-            # Store in session state so it doesn't vanish
-            st.session_state['report'] = report_markdown
+            # Store in session state
+            st.session_state['structured_data'] = structured_data
             st.session_state['company_name'] = company_name
             
+            status_box.update(label="✅ Analysis Complete!", state="complete", expanded=False)
+            
         except Exception as e:
-            status_box.update(label="Error Occurred", state="error")
+            status_box.update(label="❌ Error Occurred", state="error")
             st.error(f"Failed to generate report: {str(e)}")
+            st.exception(e)
 
-# 6. DISPLAY RESULTS
-if 'report' in st.session_state:
+# DISPLAY RESULTS
+if 'structured_data' in st.session_state:
     st.divider()
-
-    # --- PREVIEW SECTION ---
-    st.subheader(f"Strategy for {st.session_state['company_name']}")
-
-    # Tabs for better UX: View the Raw Text or Preview the Formatting
-    tab1, tab2 = st.tabs(["📄 Read Report", "⚙️ System Logic"])
-
+    data = st.session_state['structured_data']
+    company = st.session_state['company_name']
+    
+    st.subheader(f"📊 Strategy Preview: {company}")
+    
+    # Tabs for different views
+    tab1, tab2, tab3 = st.tabs(["📄 Preview", "🔍 Data Inspection", "📥 Export"])
+    
     with tab1:
-        st.markdown(st.session_state['report'])
-
+        # Section 1: Snapshot
+        with st.expander("🏢 Company Snapshot", expanded=True):
+            snapshot = data.get('snapshot', {})
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Industry:** {snapshot.get('industry', 'N/A')}")
+                st.markdown(f"**Location:** {snapshot.get('location', 'N/A')}")
+            with col2:
+                st.markdown(f"**Size:** {snapshot.get('size', 'N/A')}")
+                st.markdown(f"**Footprint:** {snapshot.get('footprint', 'N/A')}")
+            
+            if snapshot.get('tech_stack'):
+                st.markdown("**Current Tech Stack:**")
+                st.markdown(" • ".join(snapshot['tech_stack']))
+            
+            if snapshot.get('change_events'):
+                st.markdown("**Recent Changes:**")
+                for event in snapshot['change_events']:
+                    st.markdown(f"- {event}")
+        
+        # Section 2: Why Now
+        with st.expander("⚡ Why Now", expanded=True):
+            why_now = data.get('why_now', [])
+            for item in why_now:
+                st.markdown(f"**{item.get('title', '')}:** {item.get('description', '')}")
+        
+        # Section 3: Personas
+        with st.expander("👥 Key Personas", expanded=True):
+            personas = data.get('personas', [])
+            for persona in personas:
+                st.markdown(f"**{persona.get('title', '')}**")
+                st.markdown("*Goals:*")
+                for goal in persona.get('goals', []):
+                    st.markdown(f"- {goal}")
+                st.markdown("*Fears:*")
+                for fear in persona.get('fears', []):
+                    st.markdown(f"- {fear}")
+                st.markdown("---")
+        
+        # Section 4: Angles
+        with st.expander("🎯 Recommended Angles", expanded=True):
+            angles = data.get('angles', [])
+            for angle in angles:
+                st.markdown(f"**{angle.get('title', '')}**")
+                st.markdown(angle.get('description', ''))
+                st.info(f"📊 Key metric: {angle.get('metric', 'N/A')}")
+                st.markdown("")
+            
+            # Proof point
+            if 'proof_point' in data and data['proof_point']:
+                proof = data['proof_point']
+                st.markdown("**Social Proof:**")
+                st.markdown(f"*{proof.get('company', '')}* ({proof.get('context', '')})")
+                st.markdown(f'> "{proof.get("quote", "")}"')
+    
     with tab2:
-        st.text("Context provided to LLM:")
-        # If you want to show the raw JSON or context for the "Engineering" demo
-        st.json({"company": st.session_state['company_name'], "status": "Analyzed"})
-
-    # --- EXPORT SECTION ---
-    st.divider()
-    st.subheader("BDR Enablement")
-    col_dl, col_info = st.columns([1, 2])
-
-    with col_dl:
-        # Generate the PDF on the fly when the page reloads/renders
-        pdf_data = create_styled_pdf(st.session_state['report'], st.session_state['company_name'])
-
+        st.subheader("Raw Structured Data")
+        st.json(data)
+        
+        # Data quality checks
+        st.subheader("Quality Checks")
+        checks = {
+            "Has snapshot data": bool(data.get('snapshot')),
+            "Has why_now reasons": len(data.get('why_now', [])) > 0,
+            "Has personas": len(data.get('personas', [])) > 0,
+            "Has angles": len(data.get('angles', [])) > 0,
+            "Has tech stack": len(data.get('snapshot', {}).get('tech_stack', [])) > 0,
+            "Has change events": len(data.get('snapshot', {}).get('change_events', [])) > 0
+        }
+        
+        for check, passed in checks.items():
+            if passed:
+                st.success(f"✓ {check}")
+            else:
+                st.warning(f"⚠ {check}")
+    
+    with tab3:
+        st.subheader("📥 Export Options")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown("""
+            **Ready to share with your BDR team:**
+            - Professional Workshop branding
+            - Optimized for quick scanning
+            - Print-ready (8.5" x 11")
+            """)
+        
+        with col2:
+            # Generate PDF
+            try:
+                pdf_data = create_styled_pdf(data, company)
+                
+                st.download_button(
+                    label="📄 Download PDF",
+                    data=pdf_data,
+                    file_name=f"Workshop_ABM_{company.replace(' ', '_')}.pdf",
+                    mime="application/pdf",
+                    type="primary"
+                )
+                
+                st.success("✅ PDF ready!")
+                
+            except Exception as e:
+                st.error(f"PDF generation failed: {str(e)}")
+                st.exception(e)
+        
+        st.divider()
+        
+        # JSON export option
+        st.subheader("💾 Export Raw Data")
+        json_str = json.dumps(data, indent=2)
         st.download_button(
-            label="📥 Download PDF One-Pager",
-            data=pdf_data,
-            file_name=f"Workshop_Strategy_{st.session_state['company_name']}.pdf",
-            mime="application/pdf",
-            type="primary"
+            label="📊 Download JSON",
+            data=json_str,
+            file_name=f"Workshop_ABM_{company.replace(' ', '_')}.json",
+            mime="application/json"
         )
 
-    with col_info:
-        st.caption("✅ Ready for distribution. Formatted with Workshop branding guidelines.")
+# FOOTER
+st.divider()
+st.caption("Built by Workshop AI Operations Team • For internal BDR enablement use only")
