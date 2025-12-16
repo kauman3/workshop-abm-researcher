@@ -19,10 +19,9 @@ if not anthropic_api_key:
 tavily = TavilyClient(api_key=tavily_api_key)
 llm = ChatAnthropic(
     model="claude-sonnet-4-20250514",
-    temperature=0.0,  # Zero temperature for maximum factuality
+    temperature=0.0,
     max_tokens=5000,
 )
-
 
 def get_company_data(company_name, website_url):
     """
@@ -38,27 +37,25 @@ def get_company_data(company_name, website_url):
             {company_name} company profile headquarters employee count
             fiscal year end date financial calendar investor relations
         """,
-        # NEW: Specifically hunting for high-level business drivers
         'strategy': f"""
             {company_name} strategic plan 2025 "digital transformation" 
             "new markets" restructuring expansion "major projects" 
             "capital expenditure" strategy
         """,
+        # UPDATED TECH QUERY: Focuses on evidence (jobs, blogs, case studies) to avoid generic links
         'tech': f"""
-            {company_name} technology stack HRIS Workday ADP UKG
-            internal communications tools Microsoft Teams SharePoint Slack
+            "{company_name}" "uses" "tech stack" (Workday OR "Microsoft Teams" OR SharePoint OR Slack OR UKG)
+            site:lever.co OR site:greenhouse.io OR site:workday.com OR site:{website_url} OR site:stackshare.io "careers" "job description"
         """,
         'culture': f"""
             {company_name} glassdoor rating culture score reviews
             employee sentiment benefits perks "best places to work"
         """,
-        # SPLIT 1: Focus on Internal/Employee specific titles
         'people_internal': f"""
             {company_name} "Director of Internal Communications" 
             "Head of Internal Comms" "Manager of Employee Communications"
             "Director of Employee Experience" "Internal Communications Manager"
         """,
-        # SPLIT 2: Focus on Corporate/Executive titles
         'people_corporate': f"""
             {company_name} "VP of Corporate Communications" 
             "Chief Communications Officer" "Director of Corporate Affairs"
@@ -107,11 +104,7 @@ def get_company_data(company_name, website_url):
         context_with_sources = f"Limited information available for {company_name}."
         all_sources = []
     
-    # SYSTEM PROMPT UPDATED:
-    # 1. Prioritize STRATEGIC "Why Now" over trivial news
-    # 2. Strict Link/Source URL requirement
-    # 3. Targeted Buyer Roles
-    
+    # SYSTEM PROMPT UPDATED WITH LIMITS AND SOURCE RULES
     system_prompt = """You are an expert Account-Based Marketing researcher for Workshop.
 
     CRITICAL RULES:
@@ -121,20 +114,17 @@ def get_company_data(company_name, website_url):
     DATA EXTRACTION TASKS:
 
     1. **WHY NOW (Strategic Focus)**: 
-       - IGNORE: Generic awards, minor conference attendance, or small PR news.
-       - PRIORITIZE: 
-         * Strategic Shifts (Digital Transformation, Rebranding, M&A)
-         * Operational Changes (Return to Office, Layoffs, Hiring Sprees)
-         * Market Expansion (New Locations, Major Project Wins)
-       - The "Description" must explain *why* this creates a need for Internal Comms (e.g., "Requires aligning distributed teams").
+       - **LIMIT**: Output exactly TWO (2) high-impact strategic reasons. No more.
+       - **CRITERIA**: Prioritize Strategic Shifts, M&A, or Major Projects over awards.
 
     2. **TARGET BUYERS**: 
        - Find specific Internal Comms or Employee Experience leaders.
-       - If no specific Internal Comms role exists, look for VP Corporate Comms or HR Leaders.
        - **Do not** target the CEO unless <100 employees.
 
-    3. **TECH STACK**: 
-       - Hunt for Microsoft Teams, SharePoint, Workday, UKG.
+    3. **TECH STACK VERIFICATION**: 
+       - **STRICT SOURCE RULE**: The `source_url` for a tool MUST be a specific page proving usage (e.g., a Job Listing for "HRIS Admin", a Case Study, or an Engineering Blog post).
+       - **REJECT**: Generic homepages (e.g., "www.slack.com") or generic software directories.
+       - **SEARCH**: Look for Microsoft Teams, SharePoint, Workday, UKG.
 
     OUTPUT STRUCTURE (JSON ONLY):
     {{
@@ -160,6 +150,11 @@ def get_company_data(company_name, website_url):
           "title": "Title (e.g. 'Nuclear Market Expansion')",
           "description": "Description relating to comms needs...",
           "source_url": "https://..."
+        }},
+        {{
+          "title": "Title 2",
+          "description": "...",
+          "source_url": "..."
         }}
       ],
       "personas": [

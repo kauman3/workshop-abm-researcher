@@ -39,6 +39,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# HELPER FOR RICH OBJECTS
+def get_clean_val(data, default="Unknown"):
+    """Extracts string value from potential {value, url} object"""
+    if isinstance(data, dict):
+        return data.get('value', default)
+    return str(data) if data else default
+
 st.title("🚀 Workshop ABM One-Pager Generator")
 st.markdown("Generate hyper-personalized BDR assets powered by live research + AI")
 
@@ -56,10 +63,10 @@ with st.sidebar:
         st.error("✗ Anthropic Key Missing")
     
     st.divider()
-    st.info("**How it works:**\n\n1. Searches live web for news, tech stack, and leadership changes\n2. Identifies internal comms pain points\n3. Generates formatted PDF one-pager")
+    st.info("**How it works:**\n\n1. Deep searches for Fiscal Year, Tech Stack, & Strategic Shifts\n2. Finds Internal Comms leaders & Verified Emails\n3. Generates clickable PDF with Source Links")
     
     st.divider()
-    st.caption("v2.0 - Clean Minimal Template")
+    st.caption("v2.1 - Targeted BDR Edition")
 
 # INPUTS
 col1, col2 = st.columns(2)
@@ -76,13 +83,14 @@ if st.button("🔍 Generate Strategy", type="primary"):
         status_box = st.status("Initializing research agent...", expanded=True)
         
         try:
-            status_box.write("🕵️ Searching live web data (news, hiring, tech stack)...")
+            status_box.write("🕵️ Hunting for strategic initiatives & fiscal data...")
             
             # Get structured data from research agent
             structured_data = get_company_data(company_name, website)
             
-            status_box.write("🧠 Synthesizing insights into BDR format...")
-            status_box.write("📄 Generating PDF with Workshop branding...")
+            status_box.write("👤 Verifying internal comms decision makers...")
+            status_box.write("🧠 Synthesizing 'Why Now' hooks...")
+            status_box.write("📄 Rendering interactive PDF...")
             
             # Store in session state
             st.session_state['structured_data'] = structured_data
@@ -115,76 +123,67 @@ if 'structured_data' in st.session_state:
             with col1:
                 st.markdown(f"**Industry:** {snapshot.get('industry', 'N/A')}")
                 st.markdown(f"**Location:** {snapshot.get('location', 'N/A')}")
+                # Handle Rich Objects
+                st.markdown(f"**Fiscal Year:** {get_clean_val(snapshot.get('fiscal_year'))}")
             with col2:
                 st.markdown(f"**Size:** {snapshot.get('size', 'N/A')}")
-                st.markdown(f"**Footprint:** {snapshot.get('footprint', 'N/A')}")
+                st.markdown(f"**Glassdoor:** {get_clean_val(snapshot.get('glassdoor_score'))}")
             
             if snapshot.get('tech_stack'):
-                st.markdown("**Current Tech Stack:**")
-                # Extract just the tool names from the dict structure
-                tool_names = [item['tool'] if isinstance(item, dict) else item for item in snapshot['tech_stack']]
-                st.markdown(" • ".join(tool_names))
-            
-            if snapshot.get('change_events'):
-                st.markdown("**Recent Changes:**")
-                for event in snapshot['change_events']:
-                    st.markdown(f"- {event}")
+                st.markdown("**Tech Stack:**")
+                # Extract tool names from list of dicts
+                tools = []
+                for item in snapshot['tech_stack']:
+                    if isinstance(item, dict):
+                        tools.append(item.get('tool', ''))
+                    else:
+                        tools.append(str(item))
+                st.markdown(" • ".join(tools))
         
-        # Section 2: Why Now
-        with st.expander("⚡ Why Now", expanded=True):
+        # Section 2: Call Scripts (NEW)
+        with st.expander("⚡ Call Scripts (Openers)", expanded=True):
+            openers = data.get('openers', [])
+            for op in openers:
+                st.markdown(f"**{op.get('label', 'Opener')}**")
+                st.info(f'"{op.get("script", "")}"')
+
+        # Section 3: Why Now
+        with st.expander("🚀 Why Now (Strategic)", expanded=True):
             why_now = data.get('why_now', [])
             for item in why_now:
-                st.markdown(f"**{item.get('title', '')}:** {item.get('description', '')}")
-        
-        # Section 3: Personas
-        with st.expander("👥 Key Personas", expanded=True):
-            personas = data.get('personas', [])
-            for persona in personas:
-                st.markdown(f"**{persona.get('title', '')}**")
-                st.markdown("*Goals:*")
-                for goal in persona.get('goals', []):
-                    st.markdown(f"- {goal}")
-                st.markdown("*Fears:*")
-                for fear in persona.get('fears', []):
-                    st.markdown(f"- {fear}")
+                title = item.get('title', 'Insight')
+                desc = item.get('description', '')
+                url = item.get('source_url')
+                
+                link_icon = "🔗" if url else ""
+                st.markdown(f"**{title}** {link_icon}")
+                st.markdown(desc)
                 st.markdown("---")
         
-        # Section 4: Angles
-        with st.expander("🎯 Recommended Angles", expanded=True):
-            angles = data.get('angles', [])
-            for angle in angles:
-                st.markdown(f"**{angle.get('title', '')}**")
-                st.markdown(angle.get('description', ''))
-                st.info(f"📊 Key metric: {angle.get('metric', 'N/A')}")
+        # Section 4: Personas
+        with st.expander("👥 Key Decision Makers", expanded=True):
+            personas = data.get('personas', [])
+            for p in personas:
+                name = p.get('name', 'Unknown')
+                role = p.get('role', 'Role')
+                is_verified = p.get('is_named_person', False)
+                email = p.get('email', 'Unknown')
+                
+                header = f"**{name}** - *{role}*"
+                if is_verified:
+                    header += " ✅ (Verified)"
+                
+                st.markdown(header)
+                if email and email != 'Unknown':
+                    st.caption(f"📧 {email}")
+                
+                st.markdown("*Goals:* " + ", ".join(p.get('goals', [])[:2]))
+                st.markdown("*Pains:* " + ", ".join(p.get('fears', [])[:2]))
                 st.markdown("")
-            
-            # Proof point
-            if 'proof_point' in data and data['proof_point']:
-                proof = data['proof_point']
-                st.markdown("**Social Proof:**")
-                st.markdown(f"*{proof.get('company', '')}* ({proof.get('context', '')})")
-                st.markdown(f'> "{proof.get("quote", "")}"')
     
     with tab2:
         st.subheader("Raw Structured Data")
         st.json(data)
-        
-        # Data quality checks
-        st.subheader("Quality Checks")
-        checks = {
-            "Has snapshot data": bool(data.get('snapshot')),
-            "Has why_now reasons": len(data.get('why_now', [])) > 0,
-            "Has personas": len(data.get('personas', [])) > 0,
-            "Has angles": len(data.get('angles', [])) > 0,
-            "Has tech stack": len(data.get('snapshot', {}).get('tech_stack', [])) > 0,
-            "Has change events": len(data.get('snapshot', {}).get('change_events', [])) > 0
-        }
-        
-        for check, passed in checks.items():
-            if passed:
-                st.success(f"✓ {check}")
-            else:
-                st.warning(f"⚠ {check}")
     
     with tab3:
         st.subheader("📥 Export Options")
@@ -195,8 +194,8 @@ if 'structured_data' in st.session_state:
             st.markdown("""
             **Ready to share with your BDR team:**
             - Professional Workshop branding
-            - Optimized for quick scanning
-            - Print-ready (8.5" x 11")
+            - Clickable Source Links
+            - Single Page Format
             """)
         
         with col2:
@@ -207,8 +206,7 @@ if 'structured_data' in st.session_state:
                 possible_paths = [
                     'workshop_logo.png',
                     'assets/workshop_logo.png',
-                    'workshop_logo_full.png',
-                    'assets/workshop_logo_full.png'
+                    'workshop_logo_full.png'
                 ]
                 for path in possible_paths:
                     if os.path.exists(path):
@@ -225,28 +223,10 @@ if 'structured_data' in st.session_state:
                     type="primary"
                 )
                 
-                if logo_path:
-                    st.success("✅ PDF ready with branding!")
-                else:
-                    st.success("✅ PDF ready!")
-                    st.info("💡 Add workshop_logo.png to root directory for branded header")
-                
             except Exception as e:
                 st.error(f"PDF generation failed: {str(e)}")
                 st.exception(e)
-        
-        st.divider()
-        
-        # JSON export option
-        st.subheader("💾 Export Raw Data")
-        json_str = json.dumps(data, indent=2)
-        st.download_button(
-            label="📊 Download JSON",
-            data=json_str,
-            file_name=f"Workshop_ABM_{company.replace(' ', '_')}.json",
-            mime="application/json"
-        )
 
 # FOOTER
 st.divider()
-st.caption("Built by Workshop AI Operations Team • For internal BDR enablement use only")
+st.caption("Built by Workshop AI Operations Team • Internal Use Only")
