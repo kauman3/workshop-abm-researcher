@@ -1,14 +1,11 @@
 from xhtml2pdf import pisa
 from io import BytesIO
-import re
+from datetime import datetime
 
 def create_styled_pdf(structured_data, company_name):
     """
     Converts structured data into a branded Workshop PDF using xhtml2pdf.
-    
-    Args:
-        structured_data: Dict with keys: snapshot, why_now, personas, angles
-        company_name: String name of the target company
+    Optimized for xhtml2pdf's limitations while maintaining visual appeal.
     """
     
     # Extract sections from structured data
@@ -17,199 +14,235 @@ def create_styled_pdf(structured_data, company_name):
     personas = structured_data.get('personas', [])
     angles = structured_data.get('angles', [])
     
-    # Build snapshot HTML
+    # Build snapshot HTML - More compact, information-dense
+    tech_stack_items = snapshot.get('tech_stack', [])
+    tech_stack_html = ' '.join([
+        f'<span style="background-color: #f3f4f6; padding: 2px 6px; margin-right: 3px; font-size: 9px; border-radius: 2px; display: inline-block;">{tech}</span>'
+        for tech in tech_stack_items
+    ]) if tech_stack_items else '<span style="color: #999; font-size: 9px;">Not publicly available</span>'
+    
+    change_events_html = ''.join([
+        f'<tr><td style="padding: 2px 0; font-size: 10px; color: #374151; line-height: 1.3;"><span style="color: #FF6B35; font-weight: bold; margin-right: 4px;">•</span>{event}</td></tr>'
+        for event in snapshot.get('change_events', [])
+    ])
+    
     snapshot_html = f"""
-        <table style="width: 100%; margin-bottom: 12px;">
+        <table style="width: 100%; margin-bottom: 10px; border-collapse: collapse;">
             <tr>
-                <td style="width: 48%; padding-right: 8px; vertical-align: top;">
-                    <span style="color: #666; font-size: 10px;">Industry:</span><br/>
-                    <span style="font-weight: 600; color: #1a1a1a;">{snapshot.get('industry', 'N/A')}</span>
+                <td style="width: 23%; padding-right: 6px; vertical-align: top; padding-bottom: 6px;">
+                    <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 2px;">INDUSTRY</div>
+                    <div style="font-size: 10px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('industry', 'N/A')}</div>
                 </td>
-                <td style="width: 48%; padding-left: 8px; vertical-align: top;">
-                    <span style="color: #666; font-size: 10px;">Size:</span><br/>
-                    <span style="font-weight: 600; color: #1a1a1a;">{snapshot.get('size', 'N/A')}</span>
+                <td style="width: 23%; padding-right: 6px; vertical-align: top; padding-bottom: 6px;">
+                    <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 2px;">SIZE</div>
+                    <div style="font-size: 10px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('size', 'N/A')}</div>
                 </td>
-            </tr>
-            <tr>
-                <td style="width: 48%; padding-right: 8px; padding-top: 8px; vertical-align: top;">
-                    <span style="color: #666; font-size: 10px;">Location:</span><br/>
-                    <span style="font-weight: 600; color: #1a1a1a;">{snapshot.get('location', 'N/A')}</span>
+                <td style="width: 27%; padding-right: 6px; vertical-align: top; padding-bottom: 6px;">
+                    <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 2px;">LOCATION</div>
+                    <div style="font-size: 10px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('location', 'N/A')}</div>
                 </td>
-                <td style="width: 48%; padding-left: 8px; padding-top: 8px; vertical-align: top;">
-                    <span style="color: #666; font-size: 10px;">Footprint:</span><br/>
-                    <span style="font-weight: 600; color: #1a1a1a;">{snapshot.get('footprint', 'N/A')}</span>
+                <td style="width: 27%; vertical-align: top; padding-bottom: 6px;">
+                    <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 2px;">FOOTPRINT</div>
+                    <div style="font-size: 10px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('footprint', 'N/A')}</div>
                 </td>
             </tr>
         </table>
         
-        <div style="border-top: 1px solid #e5e5e5; padding-top: 8px; margin-bottom: 8px;">
-            <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 6px;">CURRENT TECH STACK</div>
-            <div style="font-size: 10px;">
-                {' '.join([f'<span style="background-color: #f3f4f6; padding: 3px 8px; margin-right: 4px; border-radius: 3px; display: inline-block; margin-bottom: 3px;">{tech}</span>' for tech in snapshot.get('tech_stack', [])])}
+        <div style="border-top: 1px solid #e5e5e5; padding-top: 7px; margin-bottom: 7px;">
+            <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 4px; letter-spacing: 0.3px;">CURRENT TECH STACK</div>
+            <div style="line-height: 1.6;">
+                {tech_stack_html}
             </div>
         </div>
         
-        <div style="border-top: 1px solid #e5e5e5; padding-top: 8px;">
-            <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 6px;">RECENT CHANGE EVENTS</div>
-            <ul style="margin: 0; padding-left: 15px; font-size: 10px; line-height: 1.4;">
-                {''.join([f'<li style="margin-bottom: 3px; color: #374151;">{event}</li>' for event in snapshot.get('change_events', [])])}
-            </ul>
+        <div style="border-top: 1px solid #e5e5e5; padding-top: 7px;">
+            <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 4px; letter-spacing: 0.3px;">RECENT CHANGE EVENTS</div>
+            <table style="width: 100%; border-collapse: collapse;">
+                {change_events_html}
+            </table>
         </div>
     """
     
-    # Build Why Now HTML
-    why_now_html = '<ul style="margin: 0; padding-left: 0; list-style: none; font-size: 11px;">'
-    for item in why_now[:3]:  # Max 3 items
+    # Build Why Now HTML - More compact
+    why_now_html = '<table style="width: 100%; border-collapse: collapse;">'
+    for idx, item in enumerate(why_now[:3]):
+        margin_bottom = '8px' if idx < len(why_now[:3]) - 1 else '0'
         why_now_html += f'''
-            <li style="margin-bottom: 10px; padding-left: 18px; position: relative; line-height: 1.5;">
-                <span style="position: absolute; left: 0; top: 2px; color: #FF6B35; font-weight: bold;">›</span>
-                <span style="font-weight: 600; color: #1a1a1a;">{item.get('title', '')}:</span>
-                <span style="color: #4b5563;"> {item.get('description', '')}</span>
-            </li>
+            <tr>
+                <td style="padding-bottom: {margin_bottom}; vertical-align: top;">
+                    <div style="line-height: 1.4;">
+                        <span style="color: #FF6B35; font-weight: bold; font-size: 13px; margin-right: 4px;">›</span>
+                        <span style="font-weight: 600; color: #1a1a1a; font-size: 10px;">{item.get('title', '')}:</span>
+                        <span style="color: #4b5563; font-size: 10px;"> {item.get('description', '')}</span>
+                    </div>
+                </td>
+            </tr>
         '''
-    why_now_html += '</ul>'
+    why_now_html += '</table>'
     
-    # Build Personas HTML
+    # Build Personas HTML - Denser layout
     personas_html = ''
-    for persona in personas[:2]:  # Max 2 personas
-        goals_html = ''.join([f'<li style="margin-bottom: 2px;">• {goal}</li>' for goal in persona.get('goals', [])])
-        fears_html = ''.join([f'<li style="margin-bottom: 2px;">• {fear}</li>' for fear in persona.get('fears', [])])
+    for idx, persona in enumerate(personas[:2]):
+        margin_bottom = '8px' if idx < len(personas[:2]) - 1 else '0'
+        
+        goals_html = ''.join([
+            f'<tr><td style="padding: 1px 0; font-size: 9px; color: #374151; line-height: 1.3;">• {goal}</td></tr>'
+            for goal in persona.get('goals', [])[:2]
+        ])
+        
+        fears_html = ''.join([
+            f'<tr><td style="padding: 1px 0; font-size: 9px; color: #374151; line-height: 1.3;">• {fear}</td></tr>'
+            for fear in persona.get('fears', [])[:2]
+        ])
         
         personas_html += f'''
-            <div style="background-color: #EFF6FF; border-left: 4px solid #2D5BFF; padding: 10px; margin-bottom: 10px; border-radius: 4px;">
-                <div style="font-weight: 600; color: #1a1a1a; font-size: 11px; margin-bottom: 6px;">{persona.get('title', '')}</div>
-                <div style="font-size: 10px;">
-                    <span style="color: #666; font-weight: 600;">Goals:</span>
-                    <ul style="margin: 3px 0 6px 0; padding-left: 15px; color: #374151;">
-                        {goals_html}
-                    </ul>
-                    <span style="color: #666; font-weight: 600;">Fears:</span>
-                    <ul style="margin: 3px 0 0 0; padding-left: 15px; color: #374151;">
-                        {fears_html}
-                    </ul>
-                </div>
+            <div style="background-color: #EFF6FF; border-left: 3px solid #2D5BFF; padding: 8px 10px; margin-bottom: {margin_bottom}; border-radius: 3px;">
+                <div style="font-weight: 700; color: #1a1a1a; font-size: 10px; margin-bottom: 4px;">{persona.get('title', '')}</div>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding-right: 8px; vertical-align: top; width: 50%;">
+                            <div style="color: #666; font-weight: 600; font-size: 8px; margin-bottom: 2px; text-transform: uppercase;">Goals</div>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                {goals_html}
+                            </table>
+                        </td>
+                        <td style="vertical-align: top; width: 50%;">
+                            <div style="color: #666; font-weight: 600; font-size: 8px; margin-bottom: 2px; text-transform: uppercase;">Fears</div>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                {fears_html}
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </div>
         '''
     
-    # Build Angles HTML
+    # Build Angles HTML - More information density
     angles_html = ''
-    for angle in angles[:2]:  # Max 2 angles
+    for idx, angle in enumerate(angles[:2]):
+        margin_bottom = '10px' if idx < len(angles[:2]) - 1 else '0'
         angles_html += f'''
-            <div style="border-left: 4px solid #2D5BFF; padding-left: 10px; margin-bottom: 12px;">
-                <div style="font-weight: 600; color: #1a1a1a; font-size: 11px; margin-bottom: 4px;">{angle.get('title', '')}</div>
-                <p style="font-size: 10px; color: #374151; line-height: 1.5; margin: 0 0 6px 0;">{angle.get('description', '')}</p>
-                <div style="font-size: 9px;">
+            <div style="border-left: 3px solid #2D5BFF; padding-left: 8px; margin-bottom: {margin_bottom};">
+                <div style="font-weight: 700; color: #1a1a1a; font-size: 10px; margin-bottom: 3px;">{angle.get('title', '')}</div>
+                <div style="font-size: 9px; color: #374151; line-height: 1.4; margin-bottom: 4px;">{angle.get('description', '')}</div>
+                <div style="font-size: 8px; background-color: #f9fafb; padding: 3px 6px; display: inline-block; border-radius: 2px;">
                     <span style="font-weight: 600; color: #666;">Key metric:</span>
-                    <span style="color: #374151;"> {angle.get('metric', '')}</span>
+                    <span style="color: #1a1a1a;"> {angle.get('metric', '')}</span>
                 </div>
             </div>
         '''
     
     # Add proof point if provided
     proof = structured_data.get('proof_point', {})
-    if proof:
+    if proof and proof.get('company'):
         angles_html += f'''
-            <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 10px; margin-top: 12px; border-radius: 4px;">
-                <div style="color: #666; font-size: 9px; font-weight: 600; margin-bottom: 4px;">SIMILAR CUSTOMER</div>
-                <div style="font-weight: 600; color: #1a1a1a; font-size: 11px; margin-bottom: 2px;">{proof.get('company', '')}</div>
-                <div style="font-size: 9px; color: #666; margin-bottom: 4px;">{proof.get('context', '')}</div>
-                <div style="font-size: 10px; color: #374151; font-style: italic;">"{proof.get('quote', '')}"</div>
+            <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 8px; margin-top: 10px; border-radius: 3px;">
+                <div style="color: #666; font-size: 8px; font-weight: 600; margin-bottom: 3px; letter-spacing: 0.3px;">SIMILAR CUSTOMER</div>
+                <div style="font-weight: 700; color: #1a1a1a; font-size: 10px; margin-bottom: 1px;">{proof.get('company', '')}</div>
+                <div style="font-size: 8px; color: #666; margin-bottom: 3px;">{proof.get('context', '')}</div>
+                <div style="font-size: 9px; color: #374151; font-style: italic; line-height: 1.3;">"{proof.get('quote', '')}"</div>
             </div>
         '''
     
-    # Complete HTML template
+    # Complete HTML template with better spacing and typography
     source_html = f"""
+    <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
         <style>
             @page {{
                 size: letter;
-                margin: 0.75in;
+                margin: 0.65in 0.75in;
             }}
             body {{
                 font-family: Helvetica, Arial, sans-serif;
-                font-size: 11px;
+                font-size: 10px;
                 color: #1a1a1a;
-                line-height: 1.4;
+                line-height: 1.3;
+                margin: 0;
+                padding: 0;
             }}
-            .header-border {{
+            .header-section {{
                 border-bottom: 2px solid #e5e7eb;
-                padding-bottom: 12px;
-                margin-bottom: 18px;
+                padding-bottom: 10px;
+                margin-bottom: 14px;
             }}
-            .section-header {{
+            .section-title {{
                 color: #1a1a1a;
-                font-size: 13px;
-                font-weight: bold;
-                margin-bottom: 10px;
-                display: block;
+                font-size: 11px;
+                font-weight: 700;
+                margin-bottom: 8px;
+                padding-bottom: 3px;
+                border-bottom: 1px solid #e5e7eb;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
             }}
-            .icon-header {{
-                color: #2D5BFF;
-                margin-right: 4px;
+            .section-title-blue {{
+                border-left: 3px solid #2D5BFF;
+                padding-left: 6px;
+                border-bottom: none;
             }}
-            .icon-header-orange {{
-                color: #FF6B35;
-                margin-right: 4px;
+            .section-title-orange {{
+                border-left: 3px solid #FF6B35;
+                padding-left: 6px;
+                border-bottom: none;
+            }}
+            .footer-section {{
+                border-top: 2px solid #e5e7eb;
+                padding-top: 8px;
+                margin-top: 14px;
             }}
         </style>
     </head>
     <body>
         <!-- Header -->
-        <div class="header-border">
-            <table style="width: 100%;">
+        <div class="header-section">
+            <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td style="width: 70%;">
-                        <div style="color: #2D5BFF; font-size: 18px; font-weight: bold; margin-bottom: 8px;">Workshop</div>
-                        <div style="font-size: 22px; font-weight: bold; color: #1a1a1a; margin-bottom: 4px;">{company_name}</div>
-                        <div style="font-size: 11px; color: #666;">Account playbook for internal communications transformation</div>
+                    <td style="width: 75%; vertical-align: bottom;">
+                        <div style="color: #2D5BFF; font-size: 16px; font-weight: 700; margin-bottom: 4px;">Workshop</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 2px; line-height: 1.1;">{company_name}</div>
+                        <div style="font-size: 9px; color: #666;">Account playbook for internal communications transformation</div>
                     </td>
-                    <td style="width: 30%; text-align: right; vertical-align: bottom;">
-                        <div style="font-size: 9px; color: #999;">Internal Use Only</div>
+                    <td style="width: 25%; text-align: right; vertical-align: bottom;">
+                        <div style="font-size: 8px; color: #999; font-weight: 500;">INTERNAL USE ONLY</div>
                     </td>
                 </tr>
             </table>
         </div>
 
         <!-- Two Column Layout -->
-        <table style="width: 100%;">
+        <table style="width: 100%; border-collapse: collapse;">
             <tr>
-                <td style="width: 48%; vertical-align: top; padding-right: 12px;">
+                <td style="width: 48%; vertical-align: top; padding-right: 10px;">
                     <!-- LEFT COLUMN -->
                     
                     <!-- Section 1: Company Snapshot -->
-                    <div style="margin-bottom: 20px;">
-                        <span class="section-header">
-                            <span class="icon-header">■</span> Company Snapshot
-                        </span>
+                    <div style="margin-bottom: 16px;">
+                        <div class="section-title section-title-blue">Company Snapshot</div>
                         {snapshot_html}
                     </div>
                     
                     <!-- Section 3: Key Personas -->
-                    <div style="margin-bottom: 20px;">
-                        <span class="section-header">
-                            <span class="icon-header">■</span> Key Personas
-                        </span>
+                    <div style="margin-bottom: 16px;">
+                        <div class="section-title section-title-blue">Key Personas</div>
                         {personas_html}
                     </div>
                     
                 </td>
-                <td style="width: 48%; vertical-align: top; padding-left: 12px;">
+                <td style="width: 48%; vertical-align: top; padding-left: 10px;">
                     <!-- RIGHT COLUMN -->
                     
                     <!-- Section 2: Why Now -->
-                    <div style="margin-bottom: 20px;">
-                        <span class="section-header">
-                            <span class="icon-header-orange">■</span> Why Now
-                        </span>
+                    <div style="margin-bottom: 16px;">
+                        <div class="section-title section-title-orange">Why Now</div>
                         {why_now_html}
                     </div>
                     
                     <!-- Section 4: Recommended Angles -->
-                    <div style="margin-bottom: 20px;">
-                        <span class="section-header">
-                            <span class="icon-header-orange">■</span> Recommended Angles
-                        </span>
+                    <div style="margin-bottom: 16px;">
+                        <div class="section-title section-title-orange">Recommended Angles</div>
                         {angles_html}
                     </div>
                     
@@ -218,8 +251,8 @@ def create_styled_pdf(structured_data, company_name):
         </table>
 
         <!-- Footer -->
-        <div style="border-top: 2px solid #e5e7eb; padding-top: 10px; margin-top: 18px; text-align: center;">
-            <div style="font-size: 9px; color: #999;">
+        <div class="footer-section">
+            <div style="font-size: 8px; color: #999; text-align: center; font-weight: 500;">
                 For BDR internal use only • Generated {_get_date_string()}
             </div>
         </div>
@@ -238,90 +271,7 @@ def create_styled_pdf(structured_data, company_name):
     result_file.seek(0)
     return result_file
 
+
 def _get_date_string():
     """Helper to get formatted date string"""
-    from datetime import datetime
     return datetime.now().strftime("%B %d, %Y")
-
-
-# Example usage structure that matches the Nebraska Medicine data
-def structure_research_output(raw_markdown_report):
-    """
-    Converts the LLM's markdown output into the structured format needed by create_styled_pdf.
-    This should be called in your app.py after getting the report from get_company_data().
-    
-    You'll need to prompt your LLM to output in this structured format, or parse the markdown here.
-    """
-    
-    # This is a template - you'll need to adjust based on your actual LLM output
-    structured = {
-        'snapshot': {
-            'industry': 'Healthcare (Academic)',
-            'size': '9,000-10,000 employees',
-            'location': 'Metro Omaha, NE',
-            'footprint': '2 hospitals, 70+ clinics',
-            'tech_stack': ['Firstup', 'ServiceNow', 'Microsoft', 'Workday'],
-            'change_events': [
-                'New CEO (Jul 2024): Dr. Michael Ash, ex-Cerner/Oracle Health CMO',
-                'New employer brand: "Together. Extraordinary." culture campaign',
-                'Retention wins: 16% ↓ voluntary turnover, 22% ↑ external hires YoY'
-            ]
-        },
-        'why_now': [
-            {
-                'title': 'Leadership transition urgency',
-                'description': 'New CEO with healthcare tech background needs seamless comms to align 9,000+ employees'
-            },
-            {
-                'title': 'Frontline reach gap',
-                'description': '60% of staff lack regular computer access; Firstup adoption at 90% but integration gaps remain'
-            },
-            {
-                'title': 'Retention momentum at risk',
-                'description': 'Recent gains (16% ↓ turnover) need sustained engagement during org change'
-            }
-        ],
-        'personas': [
-            {
-                'title': 'Internal Comms Lead',
-                'goals': [
-                    'Sustain 90% Firstup adoption momentum',
-                    'Align workforce around new CEO vision'
-                ],
-                'fears': [
-                    'Losing engagement during leadership transition',
-                    "Can't reach 60% frontline workers effectively"
-                ]
-            },
-            {
-                'title': 'HR Communications Director',
-                'goals': [
-                    'Prove ROI on comms through analytics',
-                    'Reduce silos across HR, Ops, Marketing'
-                ],
-                'fears': [
-                    'Fragmented messaging across multiple platforms',
-                    'Turnover gains reverse if comms fails to reinforce culture'
-                ]
-            }
-        ],
-        'angles': [
-            {
-                'title': 'Unified Frontline Engagement During Transition',
-                'description': 'Consolidate fragmented comms into role-based messaging hub reaching all employees—including 60% frontline. Sustain turnover reduction and accelerate alignment as Dr. Ash\'s priorities roll out.',
-                'metric': 'Maintain 16% voluntary turnover reduction during change'
-            },
-            {
-                'title': 'Data-Driven Comms for Healthcare Scale',
-                'description': 'Integrate with existing stack (Workday, ServiceNow) for analytics-backed messaging by role/location. New CEO\'s tech background means leadership values measurable comms impact on retention and onboarding.',
-                'metric': 'Move from 90% adoption to measurable business outcomes'
-            }
-        ],
-        'proof_point': {
-            'company': '[Healthcare System Name]',
-            'context': '12,000 employees, multi-state academic health network',
-            'quote': 'Workshop helped us reach dispersed clinical teams and cut first-year turnover by 18% during our merger integration.'
-        }
-    }
-    
-    return structured
