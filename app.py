@@ -121,7 +121,9 @@ if 'structured_data' in st.session_state:
             
             if snapshot.get('tech_stack'):
                 st.markdown("**Current Tech Stack:**")
-                st.markdown(" • ".join(snapshot['tech_stack']))
+                # Extract just the tool names from the dict structure
+                tool_names = [item['tool'] if isinstance(item, dict) else item for item in snapshot['tech_stack']]
+                st.markdown(" • ".join(tool_names))
             
             if snapshot.get('change_events'):
                 st.markdown("**Recent Changes:**")
@@ -200,7 +202,20 @@ if 'structured_data' in st.session_state:
         with col2:
             # Generate PDF
             try:
-                pdf_data = create_styled_pdf(data, company)
+                # Look for logo file in current directory or assets folder
+                logo_path = None
+                possible_paths = [
+                    'workshop_logo.png',
+                    'assets/workshop_logo.png',
+                    'workshop_logo_full.png',
+                    'assets/workshop_logo_full.png'
+                ]
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        logo_path = path
+                        break
+                
+                pdf_data = create_styled_pdf(data, company, logo_path=logo_path)
                 
                 st.download_button(
                     label="📄 Download PDF",
@@ -210,7 +225,11 @@ if 'structured_data' in st.session_state:
                     type="primary"
                 )
                 
-                st.success("✅ PDF ready!")
+                if logo_path:
+                    st.success("✅ PDF ready with branding!")
+                else:
+                    st.success("✅ PDF ready!")
+                    st.info("💡 Add workshop_logo.png to root directory for branded header")
                 
             except Exception as e:
                 st.error(f"PDF generation failed: {str(e)}")
