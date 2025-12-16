@@ -1,4 +1,5 @@
-from xhtml2pdf import pisa
+from weasyprint import HTML, CSS
+from weasyprint.text.fonts import FontConfiguration
 from io import BytesIO
 from datetime import datetime
 import base64
@@ -14,12 +15,8 @@ except ImportError:
 
 def create_styled_pdf(structured_data, company_name, logo_path=None):
     """
-    Converts structured data into a branded Workshop PDF with embedded links.
-    
-    Args:
-        structured_data: Dict with keys: snapshot, why_now, personas, angles
-        company_name: String name of the target company
-        logo_path: Optional path to Workshop logo image file
+    Converts structured data into a branded Workshop PDF using WeasyPrint.
+    Layout: Split-Screen Strategist (Sidebar for data, Main area for narrative).
     """
     
     # Extract sections
@@ -29,401 +26,405 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     angles = structured_data.get('angles', [])
     metadata = structured_data.get('_metadata', {})
     
-    # Logo embedding (if provided)
-    logo_html = ""
+    # --- PREPARE ASSETS ---
+    
+    # Logo Handling (Convert to base64 for embedding)
+    logo_img = ""
     if logo_path and os.path.exists(logo_path):
         try:
             with open(logo_path, 'rb') as f:
-                logo_data = base64.b64encode(f.read()).decode()
-            # Determine image type
-            ext = logo_path.lower().split('.')[-1]
-            mime_type = f'image/{ext}' if ext in ['png', 'jpg', 'jpeg'] else 'image/png'
-            logo_html = f'<img src="data:{mime_type};base64,{logo_data}" style="height: 28px; width: auto; display: block;"/>'
-        except Exception as e:
-            print(f"⚠️ Could not load logo: {e}")
-            logo_html = '<div style="color: #2D5BFF; font-size: 18px; font-weight: 700;">Workshop</div>'
+                logo_b64 = base64.b64encode(f.read()).decode()
+            mime_type = 'image/png' # Assume png for safety
+            # We use a filter to make the logo white if it's in the dark sidebar, 
+            # but for this design, let's keep the logo in the top white area or sidebar.
+            # Let's put a white version in the sidebar if possible, otherwise standard.
+            logo_img = f'<img src="data:{mime_type};base64,{logo_b64}" class="brand-logo"/>'
+        except Exception:
+            logo_img = '<div class="brand-text">Workshop</div>'
     else:
-        logo_html = '<div style="color: #2D5BFF; font-size: 18px; font-weight: 700;">Workshop</div>'
+        logo_img = '<div class="brand-text">Workshop</div>'
+
+    # --- HTML HELPERS ---
     
-    # Build snapshot HTML with more detail
-    tech_stack_items = snapshot.get('tech_stack', [])
-    if tech_stack_items:
-        tech_stack_html = ' '.join([
-            f'<span style="background-color: #EFF6FF; color: #2D5BFF; padding: 2px 7px; margin-right: 3px; margin-bottom: 3px; font-size: 9px; border-radius: 2px; display: inline-block; font-weight: 600; border: 1px solid #DBEAFE;">{item.get("tool", item) if isinstance(item, dict) else item}</span>'
-            for item in tech_stack_items
-        ])
-    else:
-        tech_stack_html = '<span style="color: #999; font-size: 9px; font-style: italic;">Not publicly available</span>'
+    def get_tech_stack_html(stack):
+        if not stack: return '<div class="empty-state">No tech stack data</div>'
+        html = '<div class="tag-container">'
+        for item in stack:
+            tool = item.get("tool", item) if isinstance(item, dict) else item
+            html += f'<span class="tag tag-tech">{tool}</span>'
+        html += '</div>'
+        return html
+
+    def get_change_events_html(events):
+        if not events: return '<div class="empty-state">No recent changes found</div>'
+        html = '<ul class="event-list">'
+        for item in events[:4]:
+            text = item.get('event', str(item)) if isinstance(item, dict) else str(item)
+            html += f'<li>{text}</li>'
+        html += '</ul>'
+        return html
+
+    # --- CONTENT GENERATION ---
     
-    # Change events with links
-    change_events_items = snapshot.get('change_events', [])
-    if change_events_items:
-        change_events_html = ''
-        for item in change_events_items[:4]:  # Max 4 events
-            if isinstance(item, dict):
-                event_text = item.get('event', str(item))
-                source_url = item.get('source_url', '')
-                if source_url:
-                    change_events_html += f'<tr><td style="padding: 2px 0; font-size: 9px; color: #374151; line-height: 1.4;"><span style="color: #FF6B35; font-weight: bold; margin-right: 4px;">•</span><a href="{source_url}" style="color: #374151; text-decoration: none;">{event_text}</a></td></tr>'
-                else:
-                    change_events_html += f'<tr><td style="padding: 2px 0; font-size: 9px; color: #374151; line-height: 1.4;"><span style="color: #FF6B35; font-weight: bold; margin-right: 4px;">•</span>{event_text}</td></tr>'
-            else:
-                change_events_html += f'<tr><td style="padding: 2px 0; font-size: 9px; color: #374151; line-height: 1.4;"><span style="color: #FF6B35; font-weight: bold; margin-right: 4px;">•</span>{item}</td></tr>'
-    else:
-        change_events_html = '<tr><td style="padding: 2px 0; font-size: 9px; color: #999; font-style: italic;">Limited public information available</td></tr>'
+    # 1. Sidebar Content (The "Facts")
+    industry = snapshot.get('industry', 'Unknown')
+    size = snapshot.get('size', 'Unknown')
+    location = snapshot.get('location', 'Unknown')
+    tech_stack_html = get_tech_stack_html(snapshot.get('tech_stack', []))
+    change_events_html = get_change_events_html(snapshot.get('change_events', []))
     
-    snapshot_html = f"""
-        <table style="width: 100%; margin-bottom: 8px; border-collapse: collapse;">
-            <tr>
-                <td style="width: 23%; padding-right: 5px; vertical-align: top; padding-bottom: 5px;">
-                    <div style="color: #666; font-size: 8px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Industry</div>
-                    <div style="font-size: 9px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('industry', 'Unknown')}</div>
-                </td>
-                <td style="width: 23%; padding-right: 5px; vertical-align: top; padding-bottom: 5px;">
-                    <div style="color: #666; font-size: 8px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Size</div>
-                    <div style="font-size: 9px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('size', 'Unknown')}</div>
-                </td>
-                <td style="width: 27%; padding-right: 5px; vertical-align: top; padding-bottom: 5px;">
-                    <div style="color: #666; font-size: 8px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Location</div>
-                    <div style="font-size: 9px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('location', 'Unknown')}</div>
-                </td>
-                <td style="width: 27%; vertical-align: top; padding-bottom: 5px;">
-                    <div style="color: #666; font-size: 8px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Footprint</div>
-                    <div style="font-size: 9px; font-weight: 600; color: #1a1a1a; line-height: 1.2;">{snapshot.get('footprint', 'Unknown')}</div>
-                </td>
-            </tr>
-        </table>
-        
-        <div style="border-top: 1px solid #e5e5e5; padding-top: 6px; margin-bottom: 6px;">
-            <div style="color: #666; font-size: 8px; font-weight: 700; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px;">Current Tech Stack</div>
-            <div style="line-height: 1.7;">
-                {tech_stack_html}
+    # 2. Main Content (The "Story")
+    
+    # Why Now
+    why_now_rows = ""
+    for item in why_now[:3]:
+        title = item.get('title', 'Why Now') if isinstance(item, dict) else 'Insight'
+        desc = item.get('description', str(item)) if isinstance(item, dict) else str(item)
+        why_now_rows += f'''
+        <div class="why-now-item">
+            <div class="why-now-icon">⚡</div>
+            <div class="why-now-content">
+                <strong>{title}</strong>
+                <p>{desc}</p>
             </div>
         </div>
-        
-        <div style="border-top: 1px solid #e5e5e5; padding-top: 6px;">
-            <div style="color: #666; font-size: 8px; font-weight: 700; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px;">Recent Change Events</div>
-            <table style="width: 100%; border-collapse: collapse;">
-                {change_events_html}
-            </table>
-        </div>
-    """
-    
-    # Why Now with links
-    why_now_html = '<table style="width: 100%; border-collapse: collapse;">'
-    for idx, item in enumerate(why_now[:3]):
-        margin_bottom = '7px' if idx < len(why_now[:3]) - 1 else '0'
-        title = item.get('title', '') if isinstance(item, dict) else 'Point'
-        description = item.get('description', str(item)) if isinstance(item, dict) else str(item)
-        source_url = item.get('source_url', '') if isinstance(item, dict) else ''
-        
-        if source_url:
-            desc_html = f'<a href="{source_url}" style="color: #4b5563; text-decoration: none;">{description}</a>'
-        else:
-            desc_html = description
-            
-        why_now_html += f'''
-            <tr>
-                <td style="padding-bottom: {margin_bottom}; vertical-align: top;">
-                    <div style="line-height: 1.4;">
-                        <span style="color: #FF6B35; font-weight: bold; font-size: 12px; margin-right: 3px;">›</span>
-                        <span style="font-weight: 700; color: #1a1a1a; font-size: 9px;">{title}:</span>
-                        <span style="color: #4b5563; font-size: 9px;"> {desc_html}</span>
-                    </div>
-                </td>
-            </tr>
         '''
-    why_now_html += '</table>'
-    
-    # Personas - Enhanced with more detail
-    personas_html = ''
-    for idx, persona in enumerate(personas[:2]):
-        margin_bottom = '7px' if idx < len(personas[:2]) - 1 else '0'
-        title = persona.get('title', 'Unknown') if isinstance(persona, dict) else str(persona)
-        is_named = persona.get('is_named_person', False) if isinstance(persona, dict) else False
+
+    # Personas
+    personas_cards = ""
+    for p in personas[:2]:
+        name = p.get('title', 'Decision Maker') if isinstance(p, dict) else str(p)
+        is_verified = p.get('is_named_person', False) if isinstance(p, dict) else False
+        verified_badge = '<span class="verified-badge">✓ Verified</span>' if is_verified else ''
         
-        # Add visual indicator for actual named person
-        title_badge = ''
-        if is_named:
-            title_badge = '<span style="background-color: #10B981; color: white; font-size: 7px; padding: 1px 4px; border-radius: 2px; margin-left: 4px; font-weight: 600;">VERIFIED</span>'
+        goals = p.get('goals', []) if isinstance(p, dict) else []
+        fears = p.get('fears', []) if isinstance(p, dict) else []
         
-        goals = persona.get('goals', []) if isinstance(persona, dict) else []
-        fears = persona.get('fears', []) if isinstance(persona, dict) else []
+        goals_list = "".join([f"<li>{g}</li>" for g in goals[:2]])
+        fears_list = "".join([f"<li>{f}</li>" for f in fears[:2]])
         
-        goals_html = ''.join([
-            f'<tr><td style="padding: 1px 0; font-size: 8px; color: #374151; line-height: 1.3;">• {goal}</td></tr>'
-            for goal in goals[:3]
-        ])
-        
-        fears_html = ''.join([
-            f'<tr><td style="padding: 1px 0; font-size: 8px; color: #374151; line-height: 1.3;">• {fear}</td></tr>'
-            for fear in fears[:3]
-        ])
-        
-        personas_html += f'''
-            <div style="background-color: #EFF6FF; border-left: 3px solid #2D5BFF; padding: 7px 9px; margin-bottom: {margin_bottom}; border-radius: 2px;">
-                <div style="font-weight: 700; color: #1a1a1a; font-size: 9px; margin-bottom: 4px;">{title}{title_badge}</div>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="padding-right: 6px; vertical-align: top; width: 50%;">
-                            <div style="color: #666; font-weight: 700; font-size: 7px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Goals</div>
-                            <table style="width: 100%; border-collapse: collapse;">
-                                {goals_html}
-                            </table>
-                        </td>
-                        <td style="vertical-align: top; width: 50%;">
-                            <div style="color: #666; font-weight: 700; font-size: 7px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Fears</div>
-                            <table style="width: 100%; border-collapse: collapse;">
-                                {fears_html}
-                            </table>
-                        </td>
-                    </tr>
-                </table>
+        personas_cards += f'''
+        <div class="persona-card">
+            <div class="persona-header">
+                <span class="persona-icon">👤</span>
+                <div class="persona-title">{name} {verified_badge}</div>
             </div>
+            <div class="persona-body">
+                <div class="persona-section">
+                    <div class="persona-label" style="color:#10b981;">GOALS</div>
+                    <ul>{goals_list}</ul>
+                </div>
+                <div class="persona-section">
+                    <div class="persona-label" style="color:#ef4444;">PAINS</div>
+                    <ul>{fears_list}</ul>
+                </div>
+            </div>
+        </div>
         '''
-    
-    # Angles with source links and Workshop features
-    angles_html = ''
-    
-    # Get Workshop feature matches
-    workshop_features_matches = []
-    if FEATURES_AVAILABLE:
-        try:
-            workshop_features_matches = match_features_to_company(structured_data)
-        except Exception as e:
-            print(f"⚠️ Feature matching error: {e}")
-    
-    for idx, angle in enumerate(angles[:2]):
-        margin_bottom = '9px' if idx < len(angles[:2]) - 1 else '0'
-        title = angle.get('title', '') if isinstance(angle, dict) else 'Approach'
-        description = angle.get('description', str(angle)) if isinstance(angle, dict) else str(angle)
-        metric = angle.get('metric', 'N/A') if isinstance(angle, dict) else 'N/A'
-        sources = angle.get('sources', []) if isinstance(angle, dict) else []
-        
-        # Add source indicators
-        source_badges = ''
-        if sources:
-            source_badges = '<div style="margin-top: 3px;">'
-            for src in sources[:3]:
-                source_badges += f'<span style="background-color: #f3f4f6; color: #666; font-size: 6px; padding: 1px 3px; border-radius: 2px; margin-right: 2px; display: inline-block;">SOURCE {src}</span>'
-            source_badges += '</div>'
+
+    # Angles / Value Props
+    angles_html = ""
+    for angle in angles[:2]:
+        title = angle.get('title', 'Approach') if isinstance(angle, dict) else 'Strategy'
+        desc = angle.get('description', '') if isinstance(angle, dict) else ''
+        metric = angle.get('metric', '') if isinstance(angle, dict) else ''
         
         angles_html += f'''
-            <div style="border-left: 3px solid #2D5BFF; padding-left: 7px; margin-bottom: {margin_bottom};">
-                <div style="font-weight: 700; color: #1a1a1a; font-size: 9px; margin-bottom: 2px;">{title}</div>
-                <div style="font-size: 8px; color: #374151; line-height: 1.4; margin-bottom: 3px;">{description}</div>
-                <div style="font-size: 7px; background-color: #FFF7ED; padding: 3px 5px; display: inline-block; border-radius: 2px; border: 1px solid #FFEDD5;">
-                    <span style="font-weight: 700; color: #EA580C;">Target:</span>
-                    <span style="color: #1a1a1a;"> {metric}</span>
-                </div>
-                {source_badges}
+        <div class="angle-box">
+            <div class="angle-header">{title}</div>
+            <div class="angle-desc">{desc}</div>
+            <div class="angle-metric">
+                <span class="metric-label">PROOF POINT:</span> {metric}
             </div>
+        </div>
         '''
-    
-    # Workshop Features Section
-    workshop_features_html = ''
-    competitor_displacement = None
-    
+
+    # Workshop Feature Matching
+    features_html = ""
     if FEATURES_AVAILABLE:
-        # Check for competitive displacement opportunity
-        tech_stack = snapshot.get('tech_stack', [])
-        competitor_displacement = get_competitor_displacement_angle(tech_stack)
-    
-    if workshop_features_matches:
-        workshop_features_html = '<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e5e5;">'
-        workshop_features_html += '<div style="color: #666; font-size: 8px; font-weight: 700; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Workshop Platform Fit</div>'
-        
-        for idx, feature in enumerate(workshop_features_matches[:3]):  # Show top 3
-            bg_color = '#F0FDF4' if idx == 0 else '#FFF7ED' if idx == 1 else '#EFF6FF'
-            border_color = '#10B981' if idx == 0 else '#FB923C' if idx == 1 else '#3B82F6'
+        matches = match_features_to_company(structured_data)
+        if matches:
+            feature_items = ""
+            for f in matches[:3]:
+                feature_items += f'<span class="tag tag-feature">{f["name"]}</span>'
             
-            features_list = ''.join([
-                f'<tr><td style="padding: 1px 0; font-size: 7px; color: #374151; line-height: 1.3;">✓ {feat}</td></tr>'
-                for feat in feature['features'][:3]  # Show top 3 features
-            ])
+            features_html = f'''
+            <div class="sidebar-section">
+                <div class="sidebar-label">Platform Fit</div>
+                <div class="tag-container">
+                    {feature_items}
+                </div>
+            </div>
+            '''
             
-            workshop_features_html += f'''
-                <div style="background-color: {bg_color}; border-left: 2px solid {border_color}; padding: 5px 6px; margin-bottom: 5px; border-radius: 2px;">
-                    <div style="margin-bottom: 2px;">
-                        <span style="font-weight: 700; color: #1a1a1a; font-size: 8px;">{feature['name']}</span>
-                        <span style="background-color: white; color: {border_color}; font-size: 6px; padding: 1px 3px; border-radius: 2px; margin-left: 3px; font-weight: 600; border: 1px solid {border_color};">{feature['tier']}</span>
-                    </div>
-                    <table style="width: 100%; border-collapse: collapse;">
-                        {features_list}
-                    </table>
-                </div>
-            '''
-        
-        # Add competitive displacement if relevant
-        if competitor_displacement:
-            workshop_features_html += f'''
-                <div style="background-color: #FEF3C7; border: 1px solid #FCD34D; padding: 5px 6px; margin-top: 5px; border-radius: 2px;">
-                    <div style="font-size: 7px; color: #92400E; line-height: 1.3;">
-                        <span style="font-weight: 700;">💡 Opportunity:</span> {competitor_displacement}
-                    </div>
-                </div>
-            '''
-        
-        workshop_features_html += '</div>'
+    # Sources (Footer)
+    sources_count = len(metadata.get('all_sources', []))
+    date_str = datetime.now().strftime("%B %d, %Y")
+
+    # --- CSS STYLING ---
+    css_string = """
+    @page {
+        size: Letter;
+        margin: 0; /* We handle margins in the body for the full-bleed sidebar */
+    }
     
-    # Sources reference section (more compact)
-    sources_html = ''
-    all_sources = metadata.get('all_sources', [])
-    if all_sources:
-        sources_html = '<div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #e5e5e5;">'
-        sources_html += '<div style="color: #666; font-size: 7px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">Research Sources</div>'
-        sources_html += '<table style="width: 100%; border-collapse: collapse;">'
-        for idx, source in enumerate(all_sources[:8], 1):  # Increased to 8 sources
-            url = source.get('url', '')
-            title = source.get('title', 'Source')
-            # Truncate title if too long
-            if len(title) > 50:
-                title = title[:47] + '...'
-            sources_html += f'<tr><td style="padding: 0.5px 0;"><span style="color: #666; font-weight: 700; font-size: 6px;">[{idx}]</span> <a href="{url}" style="color: #2D5BFF; text-decoration: none; font-size: 6px; line-height: 1.3;">{title}</a></td></tr>'
-        sources_html += '</table></div>'
-    
-    # Complete HTML
-    source_html = f"""
+    @font-face {
+        font-family: 'Inter';
+        src: local('Arial'); /* Fallback for offline/no-font environments */
+    }
+
+    body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #ffffff;
+        color: #1f2937;
+        font-size: 10px; /* Base size */
+        line-height: 1.4;
+    }
+
+    /* LAYOUT GRID */
+    .container {
+        display: flex;
+        flex-direction: row;
+        height: 100vh; /* Full page height */
+    }
+
+    /* LEFT SIDEBAR (DARK) */
+    .sidebar {
+        flex: 0 0 32%; /* 32% Width */
+        background-color: #1e3a8a; /* Workshop Blue */
+        color: #ffffff;
+        padding: 25px;
+        box-sizing: border-box;
+    }
+
+    /* RIGHT CONTENT (LIGHT) */
+    .main-content {
+        flex: 1;
+        padding: 30px 40px;
+        background-color: #ffffff;
+    }
+
+    /* SIDEBAR STYLES */
+    .brand-area { margin-bottom: 40px; }
+    .brand-text { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+    .brand-logo { max-height: 35px; width: auto; filter: brightness(0) invert(1); } /* Make logo white */
+
+    .sidebar-section { margin-bottom: 30px; }
+    .sidebar-label { 
+        text-transform: uppercase; 
+        font-size: 9px; 
+        font-weight: 700; 
+        opacity: 0.7; 
+        margin-bottom: 8px; 
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+        padding-bottom: 4px;
+    }
+
+    .data-point { margin-bottom: 12px; }
+    .data-label { font-size: 9px; opacity: 0.7; }
+    .data-value { font-size: 12px; font-weight: 600; }
+
+    .tag-container { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tag { 
+        padding: 3px 8px; 
+        border-radius: 4px; 
+        font-size: 9px; 
+        font-weight: 500; 
+    }
+    .tag-tech { background-color: rgba(255,255,255,0.15); color: white; }
+    .tag-feature { background-color: #3b82f6; color: white; border: 1px solid rgba(255,255,255,0.2); }
+
+    .event-list { list-style: none; padding: 0; margin: 0; }
+    .event-list li { 
+        font-size: 9px; 
+        margin-bottom: 8px; 
+        padding-left: 10px; 
+        border-left: 2px solid #60a5fa;
+        opacity: 0.9;
+    }
+
+    /* MAIN CONTENT STYLES */
+    .header { 
+        border-bottom: 2px solid #f3f4f6; 
+        padding-bottom: 15px; 
+        margin-bottom: 25px; 
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+    .company-name { font-size: 28px; font-weight: 800; color: #111827; line-height: 1; }
+    .report-meta { text-align: right; color: #6b7280; font-size: 9px; }
+
+    .section-title { 
+        font-size: 14px; 
+        font-weight: 700; 
+        color: #1e3a8a; 
+        text-transform: uppercase; 
+        letter-spacing: 0.5px;
+        margin-bottom: 15px; 
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* WHY NOW BOXES */
+    .why-now-container { margin-bottom: 30px; }
+    .why-now-item { 
+        background: #f0f9ff; 
+        border-left: 4px solid #0ea5e9; 
+        padding: 10px 12px; 
+        margin-bottom: 10px; 
+        display: flex; 
+        gap: 10px; 
+        border-radius: 0 4px 4px 0;
+    }
+    .why-now-icon { font-size: 14px; }
+    .why-now-content p { margin: 2px 0 0 0; font-size: 10px; color: #374151; }
+
+    /* PERSONA CARDS (GRID) */
+    .persona-grid { 
+        display: flex; 
+        gap: 15px; 
+        margin-bottom: 30px; 
+    }
+    .persona-card { 
+        flex: 1; 
+        border: 1px solid #e5e7eb; 
+        border-radius: 6px; 
+        overflow: hidden; 
+    }
+    .persona-header { 
+        background: #f9fafb; 
+        padding: 8px 12px; 
+        border-bottom: 1px solid #e5e7eb; 
+        font-weight: 700; 
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .verified-badge { 
+        background: #d1fae5; color: #059669; 
+        font-size: 8px; padding: 1px 4px; border-radius: 2px; text-transform: uppercase; 
+    }
+    .persona-body { padding: 10px; }
+    .persona-section { margin-bottom: 8px; }
+    .persona-label { font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+    .persona-body ul { margin: 0; padding-left: 12px; }
+    .persona-body li { margin-bottom: 2px; font-size: 9px; color: #4b5563; }
+
+    /* ANGLES */
+    .angle-box { 
+        border: 1px solid #e5e7eb; 
+        border-radius: 6px; 
+        padding: 12px; 
+        margin-bottom: 12px; 
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .angle-header { font-weight: 700; color: #111827; margin-bottom: 4px; font-size: 11px; }
+    .angle-desc { color: #4b5563; margin-bottom: 8px; font-size: 10px; }
+    .angle-metric { 
+        background: #fff7ed; color: #9a3412; 
+        display: inline-block; padding: 4px 8px; 
+        border-radius: 4px; font-weight: 600; font-size: 9px; 
+        border: 1px solid #ffedd5;
+    }
+
+    .footer { 
+        margin-top: 40px; 
+        border-top: 1px solid #e5e7eb; 
+        padding-top: 10px; 
+        font-size: 8px; 
+        color: #9ca3af; 
+        display: flex;
+        justify-content: space-between;
+    }
+    """
+
+    # --- FULL HTML ASSEMBLY ---
+    html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
-        <style>
-            @page {{
-                size: letter;
-                margin: 0.5in 0.6in;
-            }}
-            body {{
-                font-family: Helvetica, Arial, sans-serif;
-                font-size: 9px;
-                color: #1a1a1a;
-                line-height: 1.3;
-                margin: 0;
-                padding: 0;
-            }}
-            a {{
-                color: #2D5BFF;
-                text-decoration: none;
-            }}
-            a:hover {{
-                text-decoration: underline;
-            }}
-            .header-section {{
-                border-bottom: 2px solid #2D5BFF;
-                padding-bottom: 8px;
-                margin-bottom: 11px;
-                background: linear-gradient(to right, #EFF6FF 0%, #ffffff 100%);
-                padding: 8px;
-                margin: -8px -8px 11px -8px;
-            }}
-            .section-title {{
-                color: #1a1a1a;
-                font-size: 10px;
-                font-weight: 700;
-                margin-bottom: 7px;
-                padding-bottom: 2px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }}
-            .section-title-blue {{
-                border-left: 3px solid #2D5BFF;
-                padding-left: 5px;
-            }}
-            .section-title-orange {{
-                border-left: 3px solid #FF6B35;
-                padding-left: 5px;
-            }}
-            .footer-section {{
-                border-top: 1px solid #e5e5e5;
-                padding-top: 6px;
-                margin-top: 11px;
-            }}
-        </style>
     </head>
     <body>
-        <!-- Header -->
-        <div class="header-section">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="width: 70%; vertical-align: middle;">
-                        {logo_html}
-                        <div style="font-size: 17px; font-weight: 700; color: #1a1a1a; margin-top: 3px; margin-bottom: 1px; line-height: 1.1;">{company_name}</div>
-                        <div style="font-size: 8px; color: #666;">Account Intelligence Brief • Internal Communications Strategy</div>
-                    </td>
-                    <td style="width: 30%; text-align: right; vertical-align: middle;">
-                        <div style="font-size: 7px; color: #999; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Internal Use Only</div>
-                        <div style="font-size: 7px; color: #999; margin-top: 2px;">{_get_date_string()}</div>
-                    </td>
-                </tr>
-            </table>
-        </div>
+        <div class="container">
+            <div class="sidebar">
+                <div class="brand-area">
+                    {logo_img}
+                </div>
+                
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Firmographic</div>
+                    <div class="data-point">
+                        <div class="data-label">Industry</div>
+                        <div class="data-value">{industry}</div>
+                    </div>
+                    <div class="data-point">
+                        <div class="data-label">Size</div>
+                        <div class="data-value">{size}</div>
+                    </div>
+                    <div class="data-point">
+                        <div class="data-label">Headquarters</div>
+                        <div class="data-value">{location}</div>
+                    </div>
+                </div>
 
-        <!-- Two Column Layout -->
-        <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-                <td style="width: 48%; vertical-align: top; padding-right: 8px;">
-                    <!-- LEFT COLUMN -->
-                    
-                    <!-- Section 1: Company Snapshot -->
-                    <div style="margin-bottom: 13px;">
-                        <div class="section-title section-title-blue">Company Snapshot</div>
-                        {snapshot_html}
-                    </div>
-                    
-                    <!-- Section 3: Key Personas -->
-                    <div style="margin-bottom: 13px;">
-                        <div class="section-title section-title-blue">Key Decision Makers</div>
-                        {personas_html}
-                    </div>
-                    
-                </td>
-                <td style="width: 48%; vertical-align: top; padding-left: 8px;">
-                    <!-- RIGHT COLUMN -->
-                    
-                    <!-- Section 2: Why Now -->
-                    <div style="margin-bottom: 13px;">
-                        <div class="section-title section-title-orange">Why Now</div>
-                        {why_now_html}
-                    </div>
-                    
-                    <!-- Section 4: Recommended Angles -->
-                    <div style="margin-bottom: 13px;">
-                        <div class="section-title section-title-orange">Recommended Approach</div>
-                        {angles_html}
-                    </div>
-                    
-                    <!-- Workshop Features -->
-                    {workshop_features_html}
-                    
-                    <!-- Sources -->
-                    {sources_html}
-                    
-                </td>
-            </tr>
-        </table>
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Tech Stack</div>
+                    {tech_stack_html}
+                </div>
 
-        <!-- Footer -->
-        <div class="footer-section">
-            <div style="font-size: 7px; color: #999; text-align: center; font-weight: 500;">
-                Workshop ABM Intelligence • For BDR Use Only • Generated by AI Research Agent
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Recent Signals</div>
+                    {change_events_html}
+                </div>
+                
+                {features_html}
+            </div>
+
+            <div class="main-content">
+                <div class="header">
+                    <div class="company-name">{company_name}</div>
+                    <div class="report-meta">
+                        <div>ACCOUNT INTELLIGENCE BRIEF</div>
+                        <div>Generated: {date_str}</div>
+                    </div>
+                </div>
+
+                <div class="section-title">🚀 Why Reach Out Now</div>
+                <div class="why-now-container">
+                    {why_now_rows}
+                </div>
+
+                <div class="section-title">👥 Key Decision Makers</div>
+                <div class="persona-grid">
+                    {personas_cards}
+                </div>
+
+                <div class="section-title">🎯 Recommended Strategy</div>
+                {angles_html}
+                
+                <div class="footer">
+                    <div>AI Research Agent v2.1 • Internal Use Only</div>
+                    <div>{sources_count} Sources Analyzed</div>
+                </div>
             </div>
         </div>
     </body>
     </html>
     """
 
-    # Render PDF
-    result_file = BytesIO()
-    pisa_status = pisa.CreatePDF(source_html, dest=result_file)
+    # --- GENERATE PDF ---
+    font_config = FontConfiguration()
+    html = HTML(string=html_content)
     
-    if pisa_status.err:
-        print(f"PDF generation error: {pisa_status.err}")
-        return None
-        
+    # Render PDF to BytesIO buffer
+    result_file = BytesIO()
+    html.write_pdf(result_file, stylesheets=[CSS(string=css_string, font_config=font_config)])
+    
     result_file.seek(0)
     return result_file
-
-
-def _get_date_string():
-    """Helper to get formatted date string"""
-    return datetime.now().strftime("%B %d, %Y")
