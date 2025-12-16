@@ -19,7 +19,7 @@ if not anthropic_api_key:
 tavily = TavilyClient(api_key=tavily_api_key)
 llm = ChatAnthropic(
     model="claude-sonnet-4-20250514",
-    temperature=0.1,  # Lower temperature for more factual output
+    temperature=0.0,  # Zero temperature for maximum factuality
     max_tokens=5000,
 )
 
@@ -32,45 +32,58 @@ def get_company_data(company_name, website_url):
     
     print(f"🕵️ Starting deep research on {company_name}...")
     
-    # Multiple targeted searches for better coverage
+    # Updated queries: Split "contacts" into specific targeted searches to improve hit rate
     queries = {
         'general': f"""
-            {company_name} company profile recent news 2024 2025
-            headquarters location employee count size
+            {company_name} company profile headquarters employee count
+            fiscal year end date financial calendar investor relations
         """,
         'changes': f"""
             {company_name} leadership changes hiring acquisitions
             expansion new initiatives 2024 2025
         """,
         'tech': f"""
-            {company_name} technology stack HRIS communication tools
-            Workday Slack Microsoft Teams internal communications
-        """,
-        'linkedin': f"""
-            {company_name} LinkedIn company employees job postings
-            recent updates organizational changes
+            {company_name} technology stack HRIS Workday ADP UKG
+            internal communications tools Microsoft Teams SharePoint Slack
         """,
         'culture': f"""
-            {company_name} employee experience workplace culture
-            internal communications engagement retention
+            {company_name} glassdoor rating culture score reviews
+            employee sentiment benefits perks "best places to work"
+        """,
+        # SPLIT 1: Focus on Internal/Employee specific titles
+        'people_internal': f"""
+            {company_name} "Director of Internal Communications" 
+            "Head of Internal Comms" "Manager of Employee Communications"
+            "Director of Employee Experience" "Internal Communications Manager"
+        """,
+        # SPLIT 2: Focus on Corporate/Executive titles (often covering Internal)
+        'people_corporate': f"""
+            {company_name} "VP of Corporate Communications" 
+            "Chief Communications Officer" "Director of Corporate Affairs"
+            "VP of Communications" "Head of Corporate Communications"
+        """,
+        # SPLIT 3: LinkedIn specific targeting
+        'people_linkedin': f"""
+            site:linkedin.com/in/ {company_name} "internal communications" OR "corporate communications"
         """
     }
     
     all_sources = []
-    search_results = {}
     
     try:
         for query_type, query in queries.items():
             print(f"  📡 Searching: {query_type}...")
+            # Increased result count slightly for people searches to dig deeper
+            max_res = 7 if 'people' in query_type else 5
+            
             results = tavily.search(
                 query=query, 
                 search_depth="advanced",
-                max_results=5,
+                max_results=max_res,
                 include_raw_content=False
             )
             
             if results and 'results' in results:
-                search_results[query_type] = results['results']
                 # Collect all sources with URLs
                 for r in results['results']:
                     all_sources.append({
@@ -94,57 +107,41 @@ def get_company_data(company_name, website_url):
         context_with_sources = f"Limited information available for {company_name}."
         all_sources = []
     
-    # Enhanced prompt with strict citation requirements
+    # Enhanced prompt with strict Role targeting and Anti-Hallucination
     system_prompt = """You are an expert Account-Based Marketing researcher for Workshop, an internal communications platform.
 
 CRITICAL RULES - READ CAREFULLY:
-1. ONLY include information you can directly cite from the provided sources
-2. DO NOT make up or infer information not explicitly stated in sources
-3. For EVERY fact, you must include the source number in a "source" field
-4. If information is not available, use "Not publicly available" or "Unknown"
-5. Return ONLY valid JSON - no markdown, no code blocks
+1. **NO HALLUCINATIONS**: If you cannot find a specific fact (like Fiscal Year or a specific Name), return "Unknown". DO NOT GUESS.
+2. **SOURCE CITATION**: For EVERY fact, you must include the source number in a "source" field.
+3. **EMAIL PRECISION**: Only provide an email if you find it explicitly OR find a clear company email pattern (e.g. "first.last@domain.com") to apply. Mark as "Unknown" otherwise.
 
-PERSONA INSTRUCTIONS:
-- Look for actual named individuals in leadership roles (CEO, CHRO, Head of HR, Head of Internal Comms, Chief People Officer)
-- Check LinkedIn mentions, press releases, company announcements
-- If you find specific names, use their actual title
-- If no specific person found, use generic title like "Head of Internal Communications"
+SPECIFIC DATA EXTRACTION TASKS:
 
-TECH STACK INSTRUCTIONS:
-- Only include tools explicitly mentioned in sources
-- Look for mentions of: HRIS (Workday, ADP, SuccessFactors), comms tools (Slack, Teams, Firstup), intranets
+1. **FISCAL YEAR**: Look for "Fiscal year ends in..." or financial report dates.
+2. **GLASSDOOR/CULTURE**: Look for specific 0-5 ratings or "Best Place to Work" awards.
+3. **TECH STACK**: Specifically look for HRIS (Workday, UKG), Intranets (SharePoint), and Comms (Teams, Slack).
+4. **TARGET BUYERS (Crucial)**: 
+    - **DO NOT** target the CEO or COO unless the company is very small (<100 employees).
+    - **FIND** roles that are responsible for internal communications.
+    - **PRIORITY ORDER**:
+        1. Director/VP of Internal Communications
+        2. Internal Comms Manager / Lead
+        3. Director/VP of Corporate Communications (if no dedicated Internal role found)
+        4. Chief Communications Officer (CCO)
+        5. Head of Employee Experience
+    - If you find a name, list it. If not, list the *Job Title* as the name and set 'is_named_person' to false.
 
-CHANGE EVENTS:
-- Must be from last 12 months
-- Include specific dates/timeframes when available
-- Focus on: leadership changes, hiring spikes, acquisitions, expansions, funding rounds
-
-WHY NOW:
-- Connect real company changes to internal comms challenges
-- Be specific about how Workshop helps with their actual situation
-- Include metrics or scale indicators when available
-
-CHARACTER LIMITS:
-- snapshot.industry: 50 chars
-- snapshot.size: 35 chars  
-- snapshot.location: 50 chars
-- snapshot.footprint: 70 chars
-- snapshot.change_events: max 4 items, 130 chars each (include source)
-- why_now items: max 3, description 160 chars (include source)
-- persona: 1-2 personas with specific titles
-- persona goals/fears: 2-3 each, 70-90 chars
-- angles: 2 angles, description 220 chars max
-
-OUTPUT STRUCTURE:
+OUTPUT STRUCTURE (JSON ONLY):
 {{
   "snapshot": {{
-    "industry": "string [40-50 chars]",
-    "size": "string [30-35 chars]",
-    "location": "string [40-50 chars]",
-    "footprint": "string [60-70 chars]",
+    "industry": "string [40 chars]",
+    "size": "string [30 chars]",
+    "location": "string [40 chars]",
+    "fiscal_year": "string (e.g., 'Ends Dec 31') or 'Unknown'",
+    "glassdoor_score": "string (e.g., '3.8/5') or 'Unknown'",
     "tech_stack": [
-      {{"tool": "Workday", "source": 3}},
-      {{"tool": "Microsoft Teams", "source": 5}}
+      {{"tool": "Workday", "category": "HRIS", "source": 3}},
+      {{"tool": "Microsoft Teams", "category": "Comms", "source": 5}}
     ],
     "change_events": [
       {{
@@ -154,6 +151,16 @@ OUTPUT STRUCTURE:
       }}
     ]
   }},
+  "openers": [
+    {{
+        "label": "The Leadership Hook",
+        "script": "Script connecting a recent leader change to comms strategy..."
+    }},
+    {{
+        "label": "The Integration Hook",
+        "script": "Script connecting their specific Tech Stack to Workshop..."
+    }}
+  ],
   "why_now": [
     {{
       "title": "Title [30 chars]",
@@ -164,24 +171,25 @@ OUTPUT STRUCTURE:
   ],
   "personas": [
     {{
-      "title": "Actual Name & Title (e.g., 'Jane Smith, VP Internal Comms') OR Generic Title",
-      "is_named_person": true/false,
-      "goals": ["goal 1 [70-90 chars]", "goal 2"],
-      "fears": ["fear 1 [70-90 chars]", "fear 2"],
+      "name": "Jane Doe OR 'Director of Internal Comms'",
+      "role": "Job Title",
+      "email": "jane.doe@company.com OR 'Unknown'",
+      "is_named_person": true,
+      "goals": ["goal 1", "goal 2"],
+      "fears": ["fear 1", "fear 2"],
       "source": 4
     }}
   ],
   "angles": [
     {{
       "title": "Angle Title [40 chars]",
-      "description": "How Workshop solves their specific challenge [220 chars]",
+      "description": "How Workshop solves their specific challenge",
       "metric": "Target outcome [60 chars]",
       "sources": [1, 3]
     }}
   ]
 }}
-
-REMEMBER: If you cannot find information, mark it as "Not publicly available" rather than making something up."""
+"""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -243,10 +251,12 @@ def get_default_section(section_name):
             'industry': 'Unknown',
             'size': 'Unknown',
             'location': 'Unknown',
-            'footprint': 'Unknown',
+            'fiscal_year': 'Unknown',
+            'glassdoor_score': 'Unknown',
             'tech_stack': [],
             'change_events': []
         },
+        'openers': [],
         'why_now': [],
         'personas': [],
         'angles': []
@@ -261,7 +271,8 @@ def get_fallback_data(company_name, website_url):
             'industry': 'Research in progress',
             'size': 'Unknown',
             'location': 'Unknown',
-            'footprint': 'Unknown',
+            'fiscal_year': 'Unknown',
+            'glassdoor_score': 'Unknown',
             'tech_stack': [],
             'change_events': [
                 {
@@ -271,6 +282,12 @@ def get_fallback_data(company_name, website_url):
                 }
             ]
         },
+        'openers': [
+            {
+                'label': 'General Outreach',
+                'script': f'I noticed {company_name} is growing—how are you scaling your internal comms?'
+            }
+        ],
         'why_now': [
             {
                 'title': 'Additional research needed',
@@ -281,27 +298,16 @@ def get_fallback_data(company_name, website_url):
         ],
         'personas': [
             {
-                'title': 'Head of Internal Communications',
+                'name': 'Director of Internal Communications',
+                'role': 'Internal Comms Lead',
+                'email': 'Unknown',
                 'is_named_person': False,
-                'goals': [
-                    'Improve employee engagement and reach',
-                    'Streamline internal messaging platforms'
-                ],
-                'fears': [
-                    'Low adoption of communication tools',
-                    'Fragmented employee experience'
-                ],
+                'goals': ['Improve engagement', 'Streamline tools'],
+                'fears': ['Low adoption', 'Noise'],
                 'source': None
             }
         ],
-        'angles': [
-            {
-                'title': 'Unified Internal Communications',
-                'description': 'Workshop provides a single platform for all internal communications, replacing fragmented tools and improving employee reach and engagement.',
-                'metric': 'Typical customers see 40%+ increase in message engagement',
-                'sources': []
-            }
-        ],
+        'angles': [],
         '_metadata': {
             'company_name': company_name,
             'website': website_url,
