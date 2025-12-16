@@ -32,15 +32,17 @@ def get_company_data(company_name, website_url):
     
     print(f"🕵️ Starting deep research on {company_name}...")
     
-    # Updated queries: Split "contacts" into specific targeted searches to improve hit rate
+    # Updated queries: Added 'strategy' to find the high-quality BDR angles
     queries = {
         'general': f"""
             {company_name} company profile headquarters employee count
             fiscal year end date financial calendar investor relations
         """,
-        'changes': f"""
-            {company_name} leadership changes hiring acquisitions
-            expansion new initiatives 2024 2025
+        # NEW: Specifically hunting for high-level business drivers
+        'strategy': f"""
+            {company_name} strategic plan 2025 "digital transformation" 
+            "new markets" restructuring expansion "major projects" 
+            "capital expenditure" strategy
         """,
         'tech': f"""
             {company_name} technology stack HRIS Workday ADP UKG
@@ -56,13 +58,12 @@ def get_company_data(company_name, website_url):
             "Head of Internal Comms" "Manager of Employee Communications"
             "Director of Employee Experience" "Internal Communications Manager"
         """,
-        # SPLIT 2: Focus on Corporate/Executive titles (often covering Internal)
+        # SPLIT 2: Focus on Corporate/Executive titles
         'people_corporate': f"""
             {company_name} "VP of Corporate Communications" 
             "Chief Communications Officer" "Director of Corporate Affairs"
             "VP of Communications" "Head of Corporate Communications"
         """,
-        # SPLIT 3: LinkedIn specific targeting
         'people_linkedin': f"""
             site:linkedin.com/in/ {company_name} "internal communications" OR "corporate communications"
         """
@@ -73,7 +74,7 @@ def get_company_data(company_name, website_url):
     try:
         for query_type, query in queries.items():
             print(f"  📡 Searching: {query_type}...")
-            # Increased result count slightly for people searches to dig deeper
+            # Use 5 results normally, 7 for people to ensure we find contacts
             max_res = 7 if 'people' in query_type else 5
             
             results = tavily.search(
@@ -84,7 +85,6 @@ def get_company_data(company_name, website_url):
             )
             
             if results and 'results' in results:
-                # Collect all sources with URLs
                 for r in results['results']:
                     all_sources.append({
                         'title': r.get('title', 'N/A'),
@@ -93,7 +93,7 @@ def get_company_data(company_name, website_url):
                         'query_type': query_type
                     })
         
-        # Build comprehensive context with source tracking
+        # Build context
         context_with_sources = ""
         for idx, source in enumerate(all_sources, 1):
             context_with_sources += f"\n\n[SOURCE {idx}]\n"
@@ -107,89 +107,81 @@ def get_company_data(company_name, website_url):
         context_with_sources = f"Limited information available for {company_name}."
         all_sources = []
     
-    # Enhanced prompt with strict Role targeting and Anti-Hallucination
-    system_prompt = """You are an expert Account-Based Marketing researcher for Workshop, an internal communications platform.
+    # SYSTEM PROMPT UPDATED:
+    # 1. Prioritize STRATEGIC "Why Now" over trivial news
+    # 2. Strict Link/Source URL requirement
+    # 3. Targeted Buyer Roles
+    
+    system_prompt = """You are an expert Account-Based Marketing researcher for Workshop.
 
-CRITICAL RULES - READ CAREFULLY:
-1. **NO HALLUCINATIONS**: If you cannot find a specific fact (like Fiscal Year or a specific Name), return "Unknown". DO NOT GUESS.
-2. **SOURCE CITATION**: For EVERY fact, you must include the source number in a "source" field.
-3. **EMAIL PRECISION**: Only provide an email if you find it explicitly OR find a clear company email pattern (e.g. "first.last@domain.com") to apply. Mark as "Unknown" otherwise.
+    CRITICAL RULES:
+    1. **NO HALLUCINATIONS**: If a specific fact isn't found, return "Unknown".
+    2. **SOURCE LINKS**: You MUST provide the `source_url` for every data point found.
+    
+    DATA EXTRACTION TASKS:
 
-SPECIFIC DATA EXTRACTION TASKS:
+    1. **WHY NOW (Strategic Focus)**: 
+       - IGNORE: Generic awards, minor conference attendance, or small PR news.
+       - PRIORITIZE: 
+         * Strategic Shifts (Digital Transformation, Rebranding, M&A)
+         * Operational Changes (Return to Office, Layoffs, Hiring Sprees)
+         * Market Expansion (New Locations, Major Project Wins)
+       - The "Description" must explain *why* this creates a need for Internal Comms (e.g., "Requires aligning distributed teams").
 
-1. **FISCAL YEAR**: Look for "Fiscal year ends in..." or financial report dates.
-2. **GLASSDOOR/CULTURE**: Look for specific 0-5 ratings or "Best Place to Work" awards.
-3. **TECH STACK**: Specifically look for HRIS (Workday, UKG), Intranets (SharePoint), and Comms (Teams, Slack).
-4. **TARGET BUYERS (Crucial)**: 
-    - **DO NOT** target the CEO or COO unless the company is very small (<100 employees).
-    - **FIND** roles that are responsible for internal communications.
-    - **PRIORITY ORDER**:
-        1. Director/VP of Internal Communications
-        2. Internal Comms Manager / Lead
-        3. Director/VP of Corporate Communications (if no dedicated Internal role found)
-        4. Chief Communications Officer (CCO)
-        5. Head of Employee Experience
-    - If you find a name, list it. If not, list the *Job Title* as the name and set 'is_named_person' to false.
+    2. **TARGET BUYERS**: 
+       - Find specific Internal Comms or Employee Experience leaders.
+       - If no specific Internal Comms role exists, look for VP Corporate Comms or HR Leaders.
+       - **Do not** target the CEO unless <100 employees.
 
-OUTPUT STRUCTURE (JSON ONLY):
-{{
-  "snapshot": {{
-    "industry": "string [40 chars]",
-    "size": "string [30 chars]",
-    "location": "string [40 chars]",
-    "fiscal_year": "string (e.g., 'Ends Dec 31') or 'Unknown'",
-    "glassdoor_score": "string (e.g., '3.8/5') or 'Unknown'",
-    "tech_stack": [
-      {{"tool": "Workday", "category": "HRIS", "source": 3}},
-      {{"tool": "Microsoft Teams", "category": "Comms", "source": 5}}
-    ],
-    "change_events": [
-      {{
-        "event": "Event description [130 chars]",
-        "source": 2,
-        "source_url": "https://..."
-      }}
-    ]
-  }},
-  "openers": [
+    3. **TECH STACK**: 
+       - Hunt for Microsoft Teams, SharePoint, Workday, UKG.
+
+    OUTPUT STRUCTURE (JSON ONLY):
     {{
-        "label": "The Leadership Hook",
-        "script": "Script connecting a recent leader change to comms strategy..."
-    }},
-    {{
-        "label": "The Integration Hook",
-        "script": "Script connecting their specific Tech Stack to Workshop..."
+      "snapshot": {{
+        "industry": "string",
+        "size": "string",
+        "location": "string",
+        "fiscal_year": {{ "value": "e.g. Ends Dec 31", "source_url": "https://..." }},
+        "glassdoor_score": {{ "value": "e.g. 4.2/5", "source_url": "https://..." }},
+        "tech_stack": [
+          {{ "tool": "Workday", "category": "HRIS", "source_url": "https://..." }}
+        ],
+        "change_events": [
+          {{ "event": "...", "source_url": "https://..." }}
+        ]
+      }},
+      "openers": [
+        {{ "label": "The Strategy Hook", "script": "..." }},
+        {{ "label": "The Tech Hook", "script": "..." }}
+      ],
+      "why_now": [
+        {{
+          "title": "Title (e.g. 'Nuclear Market Expansion')",
+          "description": "Description relating to comms needs...",
+          "source_url": "https://..."
+        }}
+      ],
+      "personas": [
+        {{
+          "name": "Jane Doe",
+          "role": "Director of Internal Comms",
+          "email": "jane.doe@company.com OR 'Unknown'",
+          "linkedin_url": "https://linkedin.com/in/...",
+          "is_named_person": true,
+          "goals": ["..."],
+          "fears": ["..."]
+        }}
+      ],
+      "angles": [
+        {{
+          "title": "Angle Title",
+          "description": "...",
+          "metric": "..."
+        }}
+      ]
     }}
-  ],
-  "why_now": [
-    {{
-      "title": "Title [30 chars]",
-      "description": "Description [160 chars]",
-      "source": 1,
-      "source_url": "https://..."
-    }}
-  ],
-  "personas": [
-    {{
-      "name": "Jane Doe OR 'Director of Internal Comms'",
-      "role": "Job Title",
-      "email": "jane.doe@company.com OR 'Unknown'",
-      "is_named_person": true,
-      "goals": ["goal 1", "goal 2"],
-      "fears": ["fear 1", "fear 2"],
-      "source": 4
-    }}
-  ],
-  "angles": [
-    {{
-      "title": "Angle Title [40 chars]",
-      "description": "How Workshop solves their specific challenge",
-      "metric": "Target outcome [60 chars]",
-      "sources": [1, 3]
-    }}
-  ]
-}}
-"""
+    """
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -211,7 +203,6 @@ Generate the structured JSON profile with accurate source citations:""")
         "context": context_with_sources
     })
     
-    # Parse and validate JSON
     try:
         clean_json = json_output.strip()
         if clean_json.startswith('```'):
@@ -240,78 +231,36 @@ Generate the structured JSON profile with accurate source citations:""")
         
     except json.JSONDecodeError as e:
         print(f"❌ JSON parsing error: {e}")
-        print(f"Raw output preview: {json_output[:300]}...")
         return get_fallback_data(company_name, website_url)
 
 
 def get_default_section(section_name):
-    """Returns default empty structure for missing sections"""
     defaults = {
         'snapshot': {
-            'industry': 'Unknown',
-            'size': 'Unknown',
-            'location': 'Unknown',
-            'fiscal_year': 'Unknown',
-            'glassdoor_score': 'Unknown',
-            'tech_stack': [],
-            'change_events': []
+            'industry': 'Unknown', 'size': 'Unknown', 'location': 'Unknown',
+            'fiscal_year': {'value': 'Unknown', 'source_url': None},
+            'glassdoor_score': {'value': 'Unknown', 'source_url': None},
+            'tech_stack': [], 'change_events': []
         },
-        'openers': [],
-        'why_now': [],
-        'personas': [],
-        'angles': []
+        'openers': [], 'why_now': [], 'personas': [], 'angles': []
     }
     return defaults.get(section_name, {})
 
 
 def get_fallback_data(company_name, website_url):
-    """Returns minimal valid structure if parsing fails completely"""
     return {
         'snapshot': {
             'industry': 'Research in progress',
             'size': 'Unknown',
             'location': 'Unknown',
-            'fiscal_year': 'Unknown',
-            'glassdoor_score': 'Unknown',
+            'fiscal_year': {'value': 'Unknown', 'source_url': None},
+            'glassdoor_score': {'value': 'Unknown', 'source_url': None},
             'tech_stack': [],
-            'change_events': [
-                {
-                    'event': 'Limited public information available',
-                    'source': None,
-                    'source_url': website_url
-                }
-            ]
+            'change_events': [{'event': 'Limited info', 'source_url': website_url}]
         },
-        'openers': [
-            {
-                'label': 'General Outreach',
-                'script': f'I noticed {company_name} is growing—how are you scaling your internal comms?'
-            }
-        ],
-        'why_now': [
-            {
-                'title': 'Additional research needed',
-                'description': f'Manual research recommended for {company_name}',
-                'source': None,
-                'source_url': website_url
-            }
-        ],
-        'personas': [
-            {
-                'name': 'Director of Internal Communications',
-                'role': 'Internal Comms Lead',
-                'email': 'Unknown',
-                'is_named_person': False,
-                'goals': ['Improve engagement', 'Streamline tools'],
-                'fears': ['Low adoption', 'Noise'],
-                'source': None
-            }
-        ],
+        'openers': [{'label': 'General', 'script': f'How is {company_name} scaling internal comms?'}],
+        'why_now': [{'title': 'Research Needed', 'description': 'Manual check recommended.', 'source_url': website_url}],
+        'personas': [{'name': 'Director of Internal Comms', 'role': 'Internal Comms Lead', 'email': 'Unknown', 'is_named_person': False}],
         'angles': [],
-        '_metadata': {
-            'company_name': company_name,
-            'website': website_url,
-            'sources_count': 0,
-            'all_sources': []
-        }
+        '_metadata': {'company_name': company_name, 'website': website_url, 'sources_count': 0, 'all_sources': []}
     }

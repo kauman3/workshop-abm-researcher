@@ -16,23 +16,16 @@ except ImportError:
 def create_styled_pdf(structured_data, company_name, logo_path=None):
     """
     Converts structured data into a branded Workshop PDF using WeasyPrint.
+    Supports clickable source links, LinkedIn embedding, and rich data objects.
     """
     
     # Extract sections
     snapshot = structured_data.get('snapshot', {})
     why_now = structured_data.get('why_now', [])
     personas = structured_data.get('personas', [])
-    angles = structured_data.get('angles', [])
     openers = structured_data.get('openers', [])
     metadata = structured_data.get('_metadata', {})
     
-    # Create Source Map for Hyperlinking
-    # Maps ID -> URL (e.g., {1: "https://nytimes.com/...", 2: "..."})
-    source_map = {}
-    if 'all_sources' in metadata:
-        for idx, src in enumerate(metadata['all_sources'], 1):
-            source_map[idx] = src.get('url', '#')
-
     # --- PREPARE ASSETS ---
     logo_img = ""
     if logo_path and os.path.exists(logo_path):
@@ -46,18 +39,24 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         logo_img = '<div class="brand-text">Workshop</div>'
 
     # --- HTML HELPERS ---
-    
-    def get_source_link(source_id, text):
-        """Wraps text in an <a> tag if source_id exists in map"""
-        if source_id and source_id in source_map:
-            return f'<a href="{source_map[source_id]}" target="_blank" class="source-link">{text}</a>'
-        return text
+
+    def get_linked_val(data_item, default="Unknown", class_name=""):
+        """
+        Handles data that might be a string OR an object {value, source_url}.
+        Returns HTML string with <a> tag if URL exists.
+        """
+        if isinstance(data_item, dict):
+            val = data_item.get('value', default)
+            url = data_item.get('source_url')
+            if url and url.startswith('http'):
+                return f'<a href="{url}" target="_blank" class="text-link {class_name}">{val}</a>'
+            return val
+        return str(data_item) if data_item else default
 
     def get_tech_ecosystem_html(stack):
-        """Generates the Tech Zone with special Teams highlighting"""
+        """Generates the Tech Zone with special Teams highlighting and source links"""
         if not stack: return '<div class="empty-state">No tech data available</div>'
         
-        # Check for Microsoft Teams (High Value Integration)
         stack_str = str(stack).lower()
         has_teams = "teams" in stack_str
         
@@ -76,11 +75,22 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         # 2. Tech Pills
         html += '<div class="tech-grid">'
         for item in stack[:8]: # Limit count
-            tool = item.get("tool", item) if isinstance(item, dict) else item
+            # Handle object vs string
+            if isinstance(item, dict):
+                tool_name = item.get('tool', 'Unknown')
+                url = item.get('source_url')
+            else:
+                tool_name = str(item)
+                url = None
+                
             # Skip Teams in the grid if we already highlighted it
-            if has_teams and "teams" in str(tool).lower():
+            if has_teams and "teams" in tool_name.lower():
                 continue
-            html += f'<span class="tech-pill">{tool}</span>'
+                
+            if url:
+                html += f'<a href="{url}" target="_blank" class="tech-pill clickable" title="View Source">{tool_name} 🔗</a>'
+            else:
+                html += f'<span class="tech-pill">{tool_name}</span>'
         html += '</div>'
         
         return html
@@ -146,53 +156,60 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     
     # 1. Sidebar Data
     industry = snapshot.get('industry', 'Unknown')
-    size = snapshot.get('size', 'Unknown')
     location = snapshot.get('location', 'Unknown')
-    fiscal = snapshot.get('fiscal_year', 'Unknown')
-    glassdoor = snapshot.get('glassdoor_score', 'N/A')
+    size = snapshot.get('size', 'Unknown')
+    
+    # Use helper for rich objects (Fiscal & Glassdoor)
+    fiscal = get_linked_val(snapshot.get('fiscal_year'))
+    glassdoor = get_linked_val(snapshot.get('glassdoor_score'))
     
     tech_html = get_tech_ecosystem_html(snapshot.get('tech_stack', []))
     openers_html = get_openers_html(openers)
     
     # 2. Main Content Data
     
-    # Why Now
+    # Why Now (Linked Titles)
     why_now_rows = ""
     for item in why_now[:3]:
-        title = item.get('title', 'Why Now') if isinstance(item, dict) else 'Insight'
-        desc = item.get('description', str(item)) if isinstance(item, dict) else str(item)
-        source_id = item.get('source') if isinstance(item, dict) else None
+        title = item.get('title', 'Insight')
+        desc = item.get('description', '')
+        url = item.get('source_url')
         
-        # Link the title if source exists
-        display_title = get_source_link(source_id, title)
-        
+        if url:
+            title_html = f'<a href="{url}" target="_blank" class="why-now-link">{title}</a>'
+        else:
+            title_html = title
+            
         why_now_rows += f'''
         <div class="why-now-item">
             <div class="why-now-icon">⚡</div>
             <div class="why-now-content">
-                <strong>{display_title}</strong>
+                <strong>{title_html}</strong>
                 <p>{desc}</p>
             </div>
         </div>
         '''
 
-    # Personas (UPDATED STRUCTURE)
+    # Personas (LinkedIn Embeds)
     personas_cards = ""
     for p in personas[:2]:
-        # Handle new keys: name, role, email
         name = p.get('name', 'Internal Comms Lead')
         role = p.get('role', 'Decision Maker')
         email = p.get('email', 'Unknown')
+        linkedin = p.get('linkedin_url')
         is_verified = p.get('is_named_person', False)
         
+        # Name Link logic
+        if linkedin:
+            name_html = f'<a href="{linkedin}" target="_blank" class="persona-link">{name} <span style="font-size:8px">🔗</span></a>'
+        else:
+            name_html = name
+
         verified_badge = '<span class="verified-badge">✓ Verified Contact</span>' if is_verified else ''
         email_html = f'<div class="persona-email">📧 {email}</div>' if email and email != 'Unknown' else ''
         
-        goals = p.get('goals', [])
-        fears = p.get('fears', [])
-        
-        goals_list = "".join([f"<li>{g}</li>" for g in goals[:2]])
-        fears_list = "".join([f"<li>{f}</li>" for f in fears[:2]])
+        goals_list = "".join([f"<li>{g}</li>" for g in p.get('goals', [])[:2]])
+        fears_list = "".join([f"<li>{f}</li>" for f in p.get('fears', [])[:2]])
         
         personas_cards += f'''
         <div class="persona-card">
@@ -200,7 +217,7 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
                 <div class="persona-top-row">
                     <span class="persona-icon">👤</span>
                     <div class="persona-identity">
-                        <div class="persona-name">{name}</div>
+                        <div class="persona-name">{name_html}</div>
                         <div class="persona-role">{role}</div>
                     </div>
                 </div>
@@ -235,10 +252,37 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         font-size: 10px; line-height: 1.4;
     }
     
-    a.source-link {
-        color: #1e3a8a;
-        text-decoration: none;
-        border-bottom: 1px dotted #1e3a8a;
+    /* LINK STYLES */
+    a { text-decoration: none; color: inherit; }
+    
+    /* Text Links (Stats) */
+    .text-link { 
+        color: #93c5fd; 
+        text-decoration: underline; 
+        text-decoration-thickness: 1px;
+    }
+    
+    /* Tech Pills Clickable */
+    .tech-pill.clickable {
+        background: rgba(255,255,255,0.2);
+        cursor: pointer;
+        color: #bfdbfe;
+        border: 1px solid #60a5fa;
+    }
+    .tech-pill.clickable:hover { background: rgba(255,255,255,0.3); }
+
+    /* Persona Links */
+    .persona-link { 
+        color: #1e40af; 
+        text-decoration: none; 
+        border-bottom: 1px dotted #1e40af;
+    }
+    .persona-link:hover { border-bottom: 1px solid #1e40af; }
+
+    /* Why Now Links */
+    .why-now-link {
+        color: #0ea5e9;
+        text-decoration: underline;
     }
 
     /* LAYOUT GRID */
@@ -346,7 +390,7 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     }
     .why-now-content p { margin: 2px 0 0 0; font-size: 10px; color: #374151; }
     
-    /* Updated Persona Cards */
+    /* Persona Cards */
     .persona-grid { display: flex; gap: 15px; margin-bottom: 30px; }
     .persona-card { flex: 1; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
     .persona-header { background: #f9fafb; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
