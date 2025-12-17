@@ -9,10 +9,11 @@ WORKSHOP_FEATURES = {
     'leadership_communication': {
         'name': 'Leadership Communication Hub',
         'features': [
-            'Drag-and-drop email builder for CEO/leadership messages',
-            'Template library with executive communication templates',
-            'Scheduling for strategic timing of announcements',
-            'Analytics on leadership message reach and engagement'
+            'Drag-and-drop functionality',
+            'Template library',
+            'Ghostwriting',
+            'Scheduling',
+            'Custom built email templates'
         ],
         'pain_points': ['leadership transition', 'new ceo', 'executive communication', 'vision alignment', 'change management'],
         'tier': 'Essential'
@@ -20,10 +21,11 @@ WORKSHOP_FEATURES = {
     'frontline_mobile': {
         'name': 'Mobile-First Frontline Reach',
         'features': [
-            'Mobile-responsive design for deskless workers',
-            'SMS add-on for shift workers without email access',
-            'QR codes for quick mobile access',
-            'Push notifications for urgent updates'
+            'Mobile/responsive design',
+            'SMS',
+            'Pages',
+            'QR codes',
+            'Additional phone numbers for SMS'
         ],
         'pain_points': ['frontline', 'deskless', 'shift workers', 'clinical staff', 'field employees', 'mobile workforce'],
         'tier': 'Essential + SMS Add-on'
@@ -31,8 +33,9 @@ WORKSHOP_FEATURES = {
     'audience_segmentation': {
         'name': 'Intelligent Audience Targeting',
         'features': [
-            'Audience segmentation by role, department, location',
+            'Audience segmentation',
             'Dynamic distribution lists',
+            'Filter by department, role, location, etc.',
             'Filter by custom properties',
             'Automated time zone sending'
         ],
@@ -42,10 +45,12 @@ WORKSHOP_FEATURES = {
     'hybrid_workforce': {
         'name': 'Hybrid Workforce Suite',
         'features': [
-            'Cross-posting to Slack, Teams, SharePoint',
-            'Shareable URLs for intranet integration',
-            'Campaign archives accessible anywhere',
-            'Device analytics (desktop vs mobile)'
+            'Microsoft Teams',
+            'Slack',
+            'Sharepoint',
+            'Workvivo',
+            'Shareable URL',
+            'Campaign archives'
         ],
         'pain_points': ['hybrid work', 'remote', 'work from home', 'distributed teams', 'flexible work'],
         'tier': 'Essential'
@@ -53,21 +58,29 @@ WORKSHOP_FEATURES = {
     'integration_ecosystem': {
         'name': 'HR System Integration',
         'features': [
-            'HRIS sync (Workday, ADP, UKG, SAP, Oracle)',
-            'Azure AD / Okta SSO',
-            'Automatic employee data sync',
-            'CSV imports for legacy systems'
+            'Workday',
+            'UKG Pro',
+            'ADP Workforce Now',
+            'SAP SuccessFactors',
+            'Oracle',
+            'Ceridian Dayforce',
+            'Azure Active Directory',
+            'Okta',
+            'Single Sign On (SSO)'
         ],
         'pain_points': ['workday', 'adp', 'hris integration', 'employee data', 'sso', 'active directory'],
-        'tier': 'Premium'
+        'tier': 'Premium (HRIS) / Essential (Directory)'
     },
     'analytics_roi': {
         'name': 'Engagement Analytics & ROI',
         'features': [
-            'Open, click, read time metrics',
-            'Individual recipient engagement tracking',
-            'Monthly performance summaries',
-            'Downloadable PDF reports for leadership'
+            'Open, click, read time, and device analytics',
+            'Click maps',
+            'Account-wide analytics',
+            'Campaign tagging & analytics',
+            'Monthly email performance summaries',
+            'Individual recipient engagement data',
+            'Downloadable PDF reports'
         ],
         'pain_points': ['engagement metrics', 'roi', 'analytics', 'measurement', 'reporting', 'data-driven'],
         'tier': 'Essential'
@@ -75,10 +88,9 @@ WORKSHOP_FEATURES = {
     'multilingual': {
         'name': 'Global Team Communication',
         'features': [
-            'Language translation tools',
-            'Multi-language template support',
-            'Region-specific audience targeting',
-            'EU/CA-based servers for compliance'
+            'Language translation',
+            'US/EU/CA-based servers',
+            'Automated time zone sending'
         ],
         'pain_points': ['international', 'global', 'multilingual', 'multiple languages', 'language barriers'],
         'tier': 'Premium'
@@ -86,21 +98,22 @@ WORKSHOP_FEATURES = {
     'change_management': {
         'name': 'Change Management Toolkit',
         'features': [
-            'Communications calendar for planning',
-            'Campaign management for multi-phase rollouts',
-            'Template management for consistency',
-            'Blackout dates to prevent message overload'
+            'Communications calendar',
+            'Campaign management',
+            'Template management',
+            'Blackout dates'
         ],
         'pain_points': ['acquisition', 'merger', 'reorganization', 'transformation', 'change initiative'],
-        'tier': 'Enhanced'
+        'tier': 'Essential (Blackout dates is Premium)'
     },
     'employee_engagement': {
         'name': 'Employee Engagement Tools',
         'features': [
-            'Embedded surveys in emails',
-            'AI-assisted content for personalization',
-            'Recognition and culture content templates',
-            'Click maps to see what resonates'
+            'Embedded surveys',
+            'AI-assisted features',
+            'AI content tools',
+            'GIPHY integration',
+            'Unsplash photo integration'
         ],
         'pain_points': ['engagement', 'retention', 'turnover', 'culture', 'employee experience'],
         'tier': 'Enhanced'
@@ -108,21 +121,23 @@ WORKSHOP_FEATURES = {
     'rapid_deployment': {
         'name': 'Fast Implementation',
         'features': [
-            'Dedicated onboarding management',
+            'Onboarding management',
             'Software training for new users',
-            'Custom-built email templates',
-            'Dedicated account management (Enhanced/Premium)'
+            'Dedicated account management',
+            'Email support'
         ],
         'pain_points': ['quick setup', 'fast deployment', 'time to value', 'ease of use'],
-        'tier': 'All tiers'
+        'tier': 'Essential'
     },
     'security_compliance': {
         'name': 'Enterprise Security',
         'features': [
-            'SOC 2 Type II certified',
+            'SOC 2 Type II',
             'GDPR compliant',
+            'Penetration testing',
+            'Access control',
             'Automatic encrypted backups',
-            'Penetration testing and 24/7 monitoring'
+            'Disaster recovery'
         ],
         'pain_points': ['security', 'compliance', 'data protection', 'healthcare', 'financial services', 'regulated'],
         'tier': 'Essential'
@@ -130,13 +145,14 @@ WORKSHOP_FEATURES = {
     'scale_enterprise': {
         'name': 'Enterprise Scale',
         'features': [
-            'Unlimited recipients',
             'Unlimited storage',
-            'Permission management for large teams',
-            'User role management'
+            'Unlimited admins',
+            'User roles management',
+            'Permission management',
+            'Unlimited user licenses'
         ],
         'pain_points': ['large organization', '5000+', '10000+', 'enterprise', 'scale'],
-        'tier': 'Enhanced'
+        'tier': 'Enhanced/Premium'
     }
 }
 

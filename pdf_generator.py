@@ -16,7 +16,8 @@ except ImportError:
 def create_styled_pdf(structured_data, company_name, logo_path=None):
     """
     Converts structured data into a branded Workshop PDF using WeasyPrint.
-    Optimized for a full single-page layout with strict source linking.
+    Uses Absolute Positioning for the main columns, but Flexbox for vertical flow 
+    to prevent content overlap.
     """
     
     # Extract sections
@@ -53,7 +54,6 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         if isinstance(data_item, dict):
             val = data_item.get('value', default)
             url = data_item.get('source_url')
-            # Relaxed truncation for Stats (35 chars)
             val = truncate_text(val, 35) 
             if url and url.startswith('http'):
                 return f'<a href="{url}" target="_blank" class="text-link {class_name}">{val}</a>'
@@ -78,7 +78,7 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
             </div>
             """
             
-        # 2. Tech Pills (Limit to 9)
+        # 2. Tech Pills
         html += '<div class="tech-grid">'
         count = 0
         for item in stack: 
@@ -91,14 +91,11 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
                 tool_name = str(item)
                 url = None
                 
-            # Skip Teams in the grid if highlighted
             if has_teams and "teams" in tool_name.lower():
                 continue
             
-            # Truncate long tool names slightly
             tool_name = truncate_text(tool_name, 20)
             
-            # Only link if URL is provided
             if url:
                 html += f'<a href="{url}" target="_blank" class="tech-pill clickable" title="View Source">{tool_name} 🔗</a>'
             else:
@@ -114,8 +111,8 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         html = ""
         for opener in openers_list[:2]:
             label = opener.get('label', 'Opener')
-            # Relaxed limit to 250 chars
-            script = truncate_text(opener.get('script', ''), 250)
+            # NO TRUNCATION HERE - show full script
+            script = opener.get('script', '') 
             html += f"""
             <div class="opener-box">
                 <div class="opener-label">{label}</div>
@@ -131,12 +128,10 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         
         rows = ""
         for m in matches[:3]: 
-            # Relaxed Pains limit
             pains = ", ".join([k.title() for k in m.get('matched_keywords', [])[:2]])
             if not pains: pains = "General Efficiency"
             pains = truncate_text(pains, 60)
             
-            # Relaxed Value Prop limit
             value_prop = m['features'][0] if m['features'] else "Streamline communications"
             value_prop = truncate_text(value_prop, 90)
             
@@ -165,7 +160,6 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         """
 
     # --- CONTENT GENERATION ---
-    
     industry = snapshot.get('industry', 'Unknown')
     location = snapshot.get('location', 'Unknown')
     size = snapshot.get('size', 'Unknown')
@@ -175,17 +169,14 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     tech_html = get_tech_ecosystem_html(snapshot.get('tech_stack', []))
     openers_html = get_openers_html(openers)
     
-    # Why Now - LIMITED TO 2 ITEMS, INCREASED TEXT
     why_now_rows = ""
-    # We only take top 2 as enforced by Research Agent, but slice here just in case
     for item in why_now[:2]:
         title = item.get('title', 'Insight')
         desc = item.get('description', '')
         url = item.get('source_url')
         
-        # Increased limits to fill space since we only have 2 items
         title = truncate_text(title, 70)
-        desc = truncate_text(desc, 350) # Approx 4-5 lines of text
+        desc = truncate_text(desc, 350)
         
         if url:
             title_html = f'<a href="{url}" target="_blank" class="why-now-link">{title}</a>'
@@ -202,7 +193,6 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         </div>
         '''
 
-    # Personas
     personas_cards = ""
     for p in personas[:2]:
         name = truncate_text(p.get('name', 'Internal Comms Lead'), 35)
@@ -219,7 +209,6 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         verified_badge = '<span class="verified-badge">✓ Verified</span>' if is_verified else ''
         email_html = f'<div class="persona-email">📧 {truncate_text(email, 35)}</div>' if email and email != 'Unknown' else ''
         
-        # Increased limits for list items
         goals_list = "".join([f"<li>{truncate_text(g, 100)}</li>" for g in p.get('goals', [])[:2]])
         fears_list = "".join([f"<li>{truncate_text(f, 100)}</li>" for f in p.get('fears', [])[:2]])
         
@@ -252,7 +241,7 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     solution_table_html = get_solution_match_table()
     sources_count = len(metadata.get('all_sources', []))
     
-    # --- CSS STYLING ---
+    # --- CSS STRATEGY ---
     css_string = """
     @page { size: Letter; margin: 0; }
     @font-face { font-family: 'Inter'; src: local('Arial'); }
@@ -261,7 +250,7 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         font-family: 'Inter', sans-serif;
         margin: 0; padding: 0;
         background-color: #ffffff; color: #1f2937;
-        font-size: 10px; /* Standard size */
+        font-size: 10px;
         line-height: 1.4;
     }
     
@@ -271,20 +260,59 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     .tech-pill.clickable { cursor: pointer; color: #bfdbfe; border: 1px solid #60a5fa; }
     .persona-link { color: #1e40af; border-bottom: 1px dotted #1e40af; }
 
-    /* LAYOUT GRID */
-    .container { display: flex; flex-direction: row; height: 100vh; overflow: hidden; }
-
-    /* SIDEBAR */
+    /* LAYOUT: ABSOLUTE COLUMNS + FLEX CONTENT */
+    
+    /* Sidebar Column */
     .sidebar {
-        flex: 0 0 34%;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 34%;
         background-color: #1e3a8a;
         color: #ffffff;
         padding: 25px;
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
-        gap: 20px;
+        gap: 15px; /* Reduced gap to fit content */
+    }
+    
+    /* Main Content Column */
+    .main-content { 
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        width: 66%;
+        padding: 35px 45px;
+        box-sizing: border-box;
     }
 
+    /* FOOTER STRATEGY */
+    
+    /* Sidebar Footer: Uses margin-top:auto to sit at bottom of flex container */
+    .sidebar-footer {
+        margin-top: auto; 
+        font-size: 8px; 
+        opacity: 0.5;
+    }
+
+    /* Main Footer: Pinned to bottom right corner */
+    .main-footer {
+        position: absolute;
+        bottom: 35px;
+        left: 45px;
+        right: 45px;
+        font-size: 8px; 
+        color: #9ca3af; 
+        display: flex; 
+        justify-content: space-between;
+        border-top: 1px solid #e5e7eb; 
+        padding-top: 10px;
+    }
+
+    /* COMPONENT STYLES */
     .brand-logo { max-height: 30px; width: auto; filter: brightness(0) invert(1); }
     .brand-text { font-size: 24px; font-weight: 800; color: white; }
 
@@ -293,6 +321,7 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 8px;
         padding: 15px;
+        flex-shrink: 0; /* Prevent shrinking if space is tight */
     }
 
     .sidebar-title {
@@ -332,18 +361,11 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
         border-radius: 0 6px 6px 6px; border-left: 2px solid #60a5fa;
     }
 
-    /* MAIN CONTENT */
-    .main-content { 
-        flex: 1; 
-        padding: 35px 45px;
-    }
-    
     .header { 
         border-bottom: 2px solid #f3f4f6; 
         padding-bottom: 15px; margin-bottom: 25px; 
         display: flex; justify-content: space-between; align-items: flex-end;
     }
-    /* COMPANY NAME FONT SIZE REDUCED TO 24px */
     .company-name { font-size: 24px; font-weight: 800; color: #111827; line-height: 1; }
     .report-meta { text-align: right; color: #6b7280; font-size: 9px; }
 
@@ -392,11 +414,6 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     .col-pain { color: #ef4444; }
     .col-feature { color: #2563eb; font-weight: 600; }
     .col-value { color: #374151; }
-
-    .footer { 
-        margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 10px; 
-        font-size: 8px; color: #9ca3af; display: flex; justify-content: space-between; 
-    }
     """
 
     html_content = f"""
@@ -404,50 +421,52 @@ def create_styled_pdf(structured_data, company_name, logo_path=None):
     <html>
     <head><meta charset="UTF-8"></head>
     <body>
-        <div class="container">
-            <div class="sidebar">
-                <div class="brand-area" style="margin-bottom:20px;">{logo_img}</div>
-                
-                <div class="sidebar-box">
-                    <div class="sidebar-title">Quick Stats</div>
-                    <div class="stat-row"><span class="stat-label">Industry</span><span class="stat-val">{industry}</span></div>
-                    <div class="stat-row"><span class="stat-label">HQ Location</span><span class="stat-val">{location}</span></div>
-                    <div class="stat-row"><span class="stat-label">Employees</span><span class="stat-val">{size}</span></div>
-                    <div class="stat-row"><span class="stat-label">Fiscal Year</span><span class="stat-val">{fiscal}</span></div>
-                    <div class="stat-row"><span class="stat-label">Glassdoor</span><span class="stat-val">{glassdoor}</span></div>
-                </div>
-
-                <div class="sidebar-box">
-                    <div class="sidebar-title">Tech Ecosystem</div>
-                    {tech_html}
-                </div>
-
-                <div class="sidebar-box" style="flex-grow: 1;">
-                    <div class="sidebar-title">⚡ Call Scripts</div>
-                    {openers_html}
-                </div>
-                
-                <div style="font-size:8px; opacity:0.5; margin-top:auto;">Internal Use Only • {datetime.now().strftime("%Y-%m-%d")}</div>
+        <div class="sidebar">
+            <div class="brand-area" style="margin-bottom:20px;">
+                {logo_img}
             </div>
 
-            <div class="main-content">
-                <div class="header">
-                    <div class="company-name">{company_name}</div>
-                    <div class="report-meta">ACCOUNT INTELLIGENCE BRIEF</div>
-                </div>
+            <div class="sidebar-box">
+                <div class="sidebar-title">Quick Stats</div>
+                <div class="stat-row"><span class="stat-label">Industry</span><span class="stat-val">{industry}</span></div>
+                <div class="stat-row"><span class="stat-label">HQ Location</span><span class="stat-val">{location}</span></div>
+                <div class="stat-row"><span class="stat-label">Employees</span><span class="stat-val">{size}</span></div>
+                <div class="stat-row"><span class="stat-label">Fiscal Year</span><span class="stat-val">{fiscal}</span></div>
+                <div class="stat-row"><span class="stat-label">Glassdoor</span><span class="stat-val">{glassdoor}</span></div>
+            </div>
 
-                <div class="section-title">🚀 Why Reach Out Now</div>
-                <div class="why-now-container">{why_now_rows}</div>
+            <div class="sidebar-box">
+                <div class="sidebar-title">Tech Ecosystem</div>
+                {tech_html}
+            </div>
 
-                <div class="section-title">👥 Key Decision Makers</div>
-                <div class="persona-grid">{personas_cards}</div>
+            <div class="sidebar-box" style="flex-grow: 1;">
+                <div class="sidebar-title">⚡ Call Scripts</div>
+                {openers_html}
+            </div>
+            
+            <div class="sidebar-footer">
+                Internal Use Only • {datetime.now().strftime("%Y-%m-%d")}
+            </div>
+        </div>
 
-                {solution_table_html}
-                
-                <div class="footer">
-                    <div>AI Research Agent v2.1 • Internal Use Only</div>
-                    <div>{sources_count} Sources Analyzed</div>
-                </div>
+        <div class="main-content">
+            <div class="header">
+                <div class="company-name">{company_name}</div>
+                <div class="report-meta">ACCOUNT INTELLIGENCE BRIEF</div>
+            </div>
+
+            <div class="section-title">🚀 Why Reach Out Now</div>
+            <div class="why-now-container">{why_now_rows}</div>
+
+            <div class="section-title">👥 Key Decision Makers</div>
+            <div class="persona-grid">{personas_cards}</div>
+
+            {solution_table_html}
+            
+            <div class="main-footer">
+                <div>AI Research Agent v2.1 • Internal Use Only</div>
+                <div>{sources_count} Sources Analyzed</div>
             </div>
         </div>
     </body>
